@@ -10,19 +10,19 @@ def mae(a, b):
 # Plot distribution
 def plot_dist(y, y_label=None, mean=False):
   plt.figure(figsize=figsize)
-  plt.hist(y, bins="auto", stacked=True, density=True)
+  plt.hist(y, bins=100, stacked=True, density=True)
   plt.xlabel(y_label)
   if mean:
     print("mean("+y_label+") =", np.mean(y))
 
 # Plot sweep of one FBG with the other static
-def plot_sweep(model, d=0.6*n, normalize = True):
+def plot_sweep(model, d=0.6*n, normalize = True, N=300):
   
-  y = np.zeros([300,FBGN])
+  y = np.zeros([N,FBGN])
   # Static
   y[:,0] = A0
   # Sweep
-  y[:,1] = np.linspace(A0-d, A0+d, 300)
+  y[:,1] = np.linspace(A0-d, A0+d, N)
 
   # broadcast shape: N, M, FBGN
   X = np.sum(R(A[None, :, None], y[:, None, :], I[None, None, :], dA[None, None, :]) ,axis=-1)
