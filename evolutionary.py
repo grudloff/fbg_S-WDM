@@ -77,34 +77,137 @@ def stock_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
 @curry
 @iteriter_op
 # differential step of differential evolution algorithm
-def diff(individual_itr: Iterator, F: int = 2, p_diff:int = 0.5, n: int = 2) -> Iterator:
+def diff(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+    # F: Differential weight $F /in [0,2]$
+    # p_diff: crossover probability $p_diff /in [0,1]
+    # n: number of genes 
+
     pop = list(individual_itr)
     N = len(pop)
     for i in range(N):        
         original = pop[i]
         individual = original.clone()
 
-        id_diff = _select_sample(i, N)
+        id_diff = _select_samples(i, N)
         A,B,C = pop[id_diff]
         V = A + F*(B-C)
 
         id_swap = random.random(n) < p_diff
+        # TODO add random index?
         individual.genome[id_swap] = V.genome[id_swap] 
         individual.evaluate()
-        if original < individual:
+        if original > individual:
             yield original
         else:
             yield individual
 
-def _select_sample(candidate, N):
+@curry
+@iteriter_op
+# differential step and swap step of swap differential evolution algorithm
+def diff_swap(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+    # F: Differential weight $F /in [0,2]$
+    # p_diff: crossover probability $p_diff /in [0,1]
+    # n: number of genes 
+
+    pop = list(individual_itr)
+    N = len(pop)
+    for i in range(N):        
+        original = pop[i]
+        individual = original.clone()
+
+        id_diff = _select_samples(i, N)
+        A,B,C = [pop[i] for i in id_diff]
+        V = A + F*(B-C)
+
+        id_swap = np.random.rand(n) < p_diff
+        # TODO add random index?
+        individual.genome[id_swap] = V.genome[id_swap] 
+        individual.evaluate()
+
+        individual_swap = individual.clone()
+        id_swap = random.sample(list(range(n)), k = 2)
+        #aux = individual.genome[id_swap[1]]
+        #individual_swap.genome[id_swap[1]] = individual_swap.genome[id_swap[0]] 
+        #individual_swap.genome[id_swap[0]] = aux
+
+        individual_swap.genome[id_swap] = individual_swap.genome[id_swap[::-1]]        
+        individual_swap.evaluate()
+
+        if individual_swap > individual:
+            individual = individual_swap
+
+        if original > individual: # This is adjusted with maximize to mean 'better than'
+            yield original
+        else:
+            yield individual
+
+def _select_samples(candidate, N):
     """
-    obtain random integers from range(N),
-    without replacement. You can't have the original candidate either.
+    obtain 3 random integers from range(N),
+    without replacement. You can't have the original candidate.
     """
     idx = list(range(N))
     idx.remove(candidate)
     id_list = random.sample(idx, k=3)
     return id_list
+ 
+
+class swap_differential_evolution():
+    def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, threshold = 1*vars.n, F=0.8, p_diff=0.9):
+        self.pop_size = pop_size
+        self.max_generation = max_generation
+        self.bounds = bounds
+        self.threshold = threshold
+        self.F = F
+        self.p_diff = p_diff
+
+
+    def predict(self, x, verbose=False):
+        if len(x.shape)==1:
+            return self._predict(x, verbose)
+        else:
+            return np.stack([self._predict(k, verbose) for k in x])
+
+
+    def _predict(self, x, verbose):
+        parents = Individual.create_population(self.pop_size,
+                                                initialize=create_real_vector(((self.bounds, ) * 2) ),
+                                                decoder=FBGDecoder(),
+                                                problem=FBGProblem(x))
+
+        # Evaluate initial population
+        parents = Individual.evaluate_population(parents)
+        best_individual = ops.truncation_selection(parents, 1)[0]
+
+        # print initial, random population
+        if verbose:
+            util.print_population(parents, generation=0)
+
+        generation_counter = util.inc_generation(context=context)
+
+        while generation_counter.generation() < self.max_generation:
+
+        #util.print_population(parents, context['leap']['generation'])
+
+            offspring = pipe(
+                                iter(parents),
+                                diff_swap(F=self.F, p_diff=self.p_diff),
+                                ops.pool(size = -1)
+                            )
+
+            parents = offspring
+
+            best_individual = ops.truncation_selection(parents, 1)[0]
+
+            #if best_individual.fitness < self.threshold:
+            #    return best_individual.genome
+
+            generation_counter()  # increment to the next generation
+
+        if verbose:
+            util.print_population(parents, context['leap']['generation'])
+
+        return np.array(best_individual.genome)
  
 
 class genetic_algorithm():
