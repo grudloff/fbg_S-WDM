@@ -69,7 +69,7 @@ def stock_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
         yield  individual 
         for genome in genome_perm:
             # TODO replace p_swap with expected permutations to try
-            if random.random() > p_swap: 
+            if random.random() < p_swap: 
                 individual = individual.clone()
                 individual.genome = list(genome)
                 yield individual
