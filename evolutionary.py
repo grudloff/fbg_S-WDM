@@ -271,17 +271,3 @@ class genetic_algorithm():
             util.print_population(parents, context['leap']['generation'])
 
         return np.array(best_individual.genome)
-
-
-def main():
-    import evolutionary as ev
-
-    y = np.array([1549.5*vars.n, 1550.5*vars.n])
-    x = X(y)
-
-    model = ev.genetic_algorithm(max_generation=1)
-    y_hat = model.evaluate(x)
-    y_hat
-
-if __name__ == "__main__":
-    main()
