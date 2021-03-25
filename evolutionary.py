@@ -15,7 +15,7 @@ from leap_ec.ops import iteriter_op
 from typing import Iterator
 from itertools import permutations  
 
-from symulation import X
+from simulation import X
 import numpy as np
 import variables as vars
 import random

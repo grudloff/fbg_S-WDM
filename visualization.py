@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from variables import *
-from symulation import R
+from simulation import R
 
 def mae(a, b):
   return np.mean(np.abs(a-b))
