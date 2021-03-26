@@ -19,6 +19,9 @@ from simulation import X
 import numpy as np
 import variables as vars
 import random
+from math import factorial
+
+from sklearn.mixture import GaussianMixture
 
 class FBGDecoder(Decoder):
 
@@ -150,7 +153,94 @@ def _select_samples(candidate, N):
     idx.remove(candidate)
     id_list = random.sample(idx, k=3)
     return id_list
- 
+
+def get_genome(population):
+    return np.array([individual.genome for individual in population])
+
+def get_top(dist):
+    #get most probable cluster
+    top_cluster_idx = np.argmax(dist.weights_)
+    #return center of top cluster
+    return dist.means_[top_cluster_idx]
+
+def sample(dist):
+    return dist.sample()[0]
+
+
+class DistributedEstimation():
+    def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, n = vars.FBGN, threshold = 1*vars.n, k = 10):
+        self.pop_size = pop_size
+        self.max_generation = max_generation
+        self.bounds = bounds
+        self.n = n
+        self.threshold = threshold
+        self.k = k
+
+    def predict(self, x, verbose=False):
+        if len(x.shape)==1:
+            return self._predict(x, verbose)
+        else:
+            return np.stack([self._predict(k, verbose) for k in x])
+
+
+    def _predict(self, x, verbose):
+        parents = Individual.create_population(self.pop_size,
+                                        initialize=create_real_vector(((self.bounds, ) * self.n) ),
+                                        decoder=FBGDecoder(),
+                                        problem=FBGProblem(x))
+
+        # Evaluate initial population/
+        parents = Individual.evaluate_population(parents)
+        best_individual = ops.truncation_selection(parents, 1)[0]
+
+        # print initial, random population
+        if verbose:
+            util.print_population(parents, generation=0)
+
+        generation_counter = util.inc_generation(context=context)
+
+        #TODO Authors use n_components=10 when we know there is one global minima
+        # and !n-1 local minimas, so there should be !n clusters
+        dist = GaussianMixture(warm_start=False, n_components=factorial(self.n), reg_covar=1e-10)
+
+        while generation_counter.generation() < self.max_generation:
+        
+            if verbose == 2:
+                util.print_population(parents, context['leap']['generation'])
+
+            offspring = pipe(
+                                parents,
+                                ops.truncation_selection(size = self.k),
+                            )
+
+            dist.fit(get_genome(offspring))
+            
+            #TODO In the paper they sample only (n-m) 
+            # and keep the previous top n, to not loose info
+            # But this shouldn't be necessary as the distribution
+            # is updated not reconstructed from scratch
+            if np.any(dist.weights_ < 1e-15):
+                dist.weights_[0]=1
+
+            new_parents_genome = dist.sample(self.pop_size)[0]
+            new_parents = [Individual(genome, decoder=FBGDecoder(), problem=FBGProblem(x)) for genome in new_parents_genome]
+            new_parents = Individual.evaluate_population(new_parents)
+            parents = offspring + new_parents
+
+            best_individual = Individual(get_top(dist), decoder=FBGDecoder(),
+                                         problem=FBGProblem(x))
+            best_individual.evaluate()
+
+            #if best_individual.fitness < self.threshold:
+            #    return best_individual.genome
+
+            generation_counter()  # increment to the next generation
+
+        if verbose:
+            util.print_population(parents, context['leap']['generation'])
+
+        return np.array(best_individual.genome)
+
 
 class swap_differential_evolution():
     def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, threshold = 1*vars.n, F=0.8, p_diff=0.9):
