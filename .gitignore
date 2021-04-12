@@ -5,4 +5,4 @@
 /FBG_simulations_moni.ipynb
 /lssvr.py
 /test.py
-*.cpy
+/__pycache__

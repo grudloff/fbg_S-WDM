@@ -31,7 +31,7 @@ class FBGDecoder(Decoder):
         super().__init__()
 
     def decode(self, genome, *args, **kwargs):
-        genome = np.array(genome)
+        #genome = np.array(genome)
         phenome = X(genome)
         return phenome
 
@@ -96,11 +96,11 @@ def swap(individual_itr: Iterator) -> Iterator:
 @curry
 @iteriter_op
 # yield permutations of each genome stochastically
-def stock_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
+def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
 
     for individual in individual_itr:
         genome_perm = permutations(individual.genome)
-        # yield original deterministically
+        # always yield original
         next(genome_perm)
         yield  individual 
         for genome in genome_perm:
@@ -150,7 +150,7 @@ def diff(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 
         A,B,C = pop[id_diff]
         V = A + F*(B-C)
 
-        id_swap = random.random(n) < p_diff
+        id_swap = np.random.rand(n) < p_diff
         # TODO add random index?
         individual.genome[id_swap] = V.genome[id_swap] 
         individual.evaluate()
@@ -160,14 +160,13 @@ def diff(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 
             yield individual
 
 @curry
-@iteriter_op
+@listiter_op
 # differential step and swap step of swap differential evolution algorithm
-def diff_swap(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+def diff_swap(pop: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
     # F: Differential weight $F /in [0,2]$
     # p_diff: crossover probability $p_diff /in [0,1]
     # n: number of genes 
 
-    pop = list(individual_itr)
     N = len(pop)
     for i in range(N):        
         original = pop[i]
@@ -205,8 +204,8 @@ def _select_samples(candidate, N):
     without replacement. You can't have the original candidate.
     """
     idx = list(range(N))
-    idx.remove(candidate)
-    id_list = random.sample(idx, k=3)
+    idx.pop(candidate) #remove candidate
+    id_list = random.sample(idx, k=3) 
     return id_list
 
 def get_genome(population):
@@ -335,7 +334,7 @@ class swap_differential_evolution():
         #util.print_population(parents, context['leap']['generation'])
 
             offspring = pipe(
-                                iter(parents),
+                                parents,
                                 diff_swap(F=self.F, p_diff=self.p_diff),
                                 ops.pool(size = -1)
                             )
@@ -443,7 +442,7 @@ class genetic_algorithm_binary():
 
         # Evaluate initial population
         parents = Individual.evaluate_population(parents)
-            best_individual = ops.truncation_selection(parents, 1)[0]
+        best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
         if verbose:
@@ -483,3 +482,21 @@ class genetic_algorithm_binary():
 
         return y_hat
 
+
+def main():
+
+    import simulation as sim
+    import evolutionary as ev
+
+    y = np.array([1549.5*vars.n, 1550.5*vars.n])
+    x = np.sum(sim.R(vars.A[:, None], y[None, :], vars.I[None, :], vars.dA[None, :]) ,axis=-1)
+
+    model = ev.genetic_algorithm_binary(max_generation=50, pop_size=150)
+    y_hat = model.predict(x)
+    print("y_hat = "+str(y_hat))
+    print(np.mean(np.abs(y_hat-y)))
+
+
+
+if __name__ == "__main__":
+    main()

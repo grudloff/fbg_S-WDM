@@ -11,7 +11,7 @@ from variables import *
 def R(A, A_b, I = 1, dA=0.4*n):
   return I*exp(-4*ln(2)*((A - A_b)/dA)**2)
 
-def X(A_b):
+def X(A_b, I=I):
     x = np.sum(R(A[:, None], A_b[None, :], I[None, :], dA[None, :]) ,axis=-1)
     return x
 

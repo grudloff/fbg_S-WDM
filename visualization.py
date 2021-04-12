@@ -41,7 +41,7 @@ def plot_sweep(model, d=0.6*n, normalize = True, N=300):
   fig = plt.figure(figsize=figsize)
 
   a1 = fig.add_axes([0,0,1,1])
-  a1.plot(y[:,1]/n, prediction/n)
+  a1.plot(y[:,1]/n, prediction/n, linewidth=2)
   a1.set_xlabel("$\lambda_{B_2}$ [nm]")
   a1.set_ylabel('$\lambda_{B_i}$ [nm]')
 
