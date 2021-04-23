@@ -25,6 +25,33 @@ from math import factorial
 
 from sklearn.mixture import GaussianMixture
 
+class Individual_hist(Individual_np):
+    ''' Individual with memory of best state genome and fitness
+    '''
+
+    def __init__(self, genome, decoder=None, problem=None):
+        super().__init__(genome, decoder, problem)
+        self.best = Individual_placeholder(genome, nan)
+
+    def evaluate_imp(self):
+        """ This is the evaluate 'implementation' called by
+            self.evaluate().   It's intended to be optionally over-ridden by
+            sub-classes to give an opportunity to pass in ancillary data to
+            the evaluate process either by tailoring the problem interface or
+            that of the given decoder.
+        """
+        self.fitness = super().evaluate_imp()
+        #update individual best
+        if self > self.best:
+            self.best = Individual_placeholder.clone(self)
+
+        #update subpopulation best
+        i = context['leap']['current_subpopulation']
+        subpop_best = context['leap']['population_best'][i]
+        if self > subpop_best:
+            context['leap']['population_best'][i] = Individual_placeholder.clone(self)
+
+        return self.fitness
 class FBGDecoder(Decoder):
 
     def __init__(self):
@@ -198,6 +225,22 @@ def diff_swap(pop: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iter
         else:
             yield individual
 
+@curry
+def update_position(parents, velocities, bounds, lr):
+    for ind, v in zip(parents, velocities):
+        ind.genome += v * lr
+        ind.genome = ind.genome.clip(*bounds)
+        yield ind
+        
+def random_migrate(subpopulations, pop_size, swarms, migration_gap):
+    #flatten
+    population = list(chain(*subpopulations))
+    #shuffle
+    random.shuffle(population)
+    #deflatten
+    subpopulations = [population[i:i+pop_size] for i in range(0, swarms*pop_size, pop_size)]
+
+    return subpopulations
 def _select_samples(candidate, N):
     """
     obtain 3 random integers from range(N),
@@ -211,6 +254,16 @@ def _select_samples(candidate, N):
 def get_genome(population):
     return np.array([individual.genome for individual in population])
 
+def get_genome_best(population):
+    ''' Get best genome of each Individual_hist of a population
+    '''
+    return np.array([individual.best.genome for individual in population])
+
+def get_genome_pop_best(population):
+    '''Get best genome of population
+    '''
+    best_individual = max(population) 
+    return best_individual.genome
 def get_top(dist):
     #get most probable cluster
     top_cluster_idx = np.argmax(dist.weights_)
@@ -220,6 +273,15 @@ def get_top(dist):
 def sample(dist):
     return dist.sample()[0]
 
+def update_velocities(parents, velocities, w, pa, ga):
+    N = len(parents)
+    r = np.random.rand(N, vars.FBGN)
+    q = np.random.rand(N, vars.FBGN)
+    parents_genome = get_genome(parents)
+    particle_best_genome = get_genome_best(parents)
+    i = context['leap']['current_subpopulation']
+    subpop_best = context['leap']['population_best'][i]
+    return w*velocities + pa*r*(particle_best_genome - parents_genome) + ga*q*(subpop_best.genome - parents_genome)
 
 class DistributedEstimation():
     def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, n = vars.FBGN, threshold = 1*vars.n, k = 10):
@@ -483,6 +545,150 @@ class genetic_algorithm_binary():
         return y_hat
 
 
+class particle_swarm_optimization():
+    def __init__(self, pop_size=50, max_generation=1000, bounds = vars.bounds, threshold = 1*vars.n, w=0.6, pa=2, ga=2, lr=0.1):
+        self.pop_size = pop_size
+        self.max_generation = max_generation
+        self.bounds = bounds
+        self.threshold = threshold
+        self.w = w # previous velocity weight constant 
+        self.pa = pa # population acceleration
+        self.ga = ga # group acceleration
+        self.lr = lr # learning rate
+
+    @stack
+    def predict(self, x, verbose=False):
+        population = Individual_hist.create_population(self.pop_size,
+                                                initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
+                                                decoder=FBGDecoder(),
+                                                problem=FBGProblem(x))
+
+        context['leap']['population_best']=[Individual_placeholder.clone(population[0])]
+
+        context['leap']['current_subpopulation'] = 0
+
+        # Evaluate initial population
+        population = Individual_hist.evaluate_population(population)
+
+        # Initialize velocities 
+        velocities = np.random.rand(self.pop_size, vars.FBGN) # Initialize random velocities in ]0,1]
+        velocities = (velocities-0.5)*2*np.diff(self.bounds) # Move to ]-diff(bounds),diff(bounds)]
+
+        # print initial, random population
+        if verbose:
+            util.print_population(population, generation=0)
+
+        generation_counter = util.inc_generation(context=context)
+
+        while generation_counter.generation() < self.max_generation:
+
+        #util.print_population(parents, context['leap']['generation'])
+
+            velocities = update_velocities(population, velocities, self.w, self.pa, self.ga)
+
+            population = pipe(population,
+                           update_position(velocities = velocities, bounds = self.bounds, lr = self.lr),
+                           ops.evaluate,
+                           ops.pool(size = -1))
+
+            #if best_individual.fitness < self.threshold:
+            #    return best_individual.genome
+
+            generation_counter()  # increment to the next generation
+
+        if verbose:
+            util.print_population(population, context['leap']['generation'])
+        
+        return get_genome_pop_best(population)
+
+
+class dynamic_multi_swarm_particle_swarm_optimization():
+    def __init__(self, pop_size=30, max_generation=1000, bounds = vars.bounds, w=0.6, pa=2, ga=2, lr=0.1, swarms=10, migration_gap=15):
+        self.pop_size = pop_size
+        self.max_generation = max_generation
+        self.bounds = bounds
+        self.w = w # previous velocity weight constant 
+        self.pa = pa # population acceleration
+        self.ga = ga # group acceleration
+        self.lr = lr # learning rate
+        self.swarms = swarms # number of swarms
+        self.migration_gap = migration_gap
+
+    @stack
+    def predict(self, x, verbose=False):
+        subpopulations = [Individual_hist.create_population(self.pop_size,
+                                                initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
+                                                decoder=FBGDecoder(),
+                                                problem=FBGProblem(x)) for _ in range(self.swarms)]
+
+        context['leap']['population_best']=[Individual_placeholder.clone(pop[0]) for pop in subpopulations]
+
+        # Evaluate initial population
+        for i, population in enumerate(subpopulations):
+            context['leap']['current_subpopulation'] = i #required to assign population_best to current subpop
+            Individual.evaluate_population(population)
+
+        # Initialize velocities 
+        velocities = np.random.rand(self.swarms, self.pop_size, vars.FBGN) # Initialize random velocities in ]0,1]
+        velocities = (velocities-0.5)*2*np.diff(self.bounds) # Move to ]-diff(bounds),diff(bounds)]
+
+        
+
+        # print initial, random population
+        if verbose:
+            util.print_population(parents, generation=0)
+
+        generation_counter = util.inc_generation(context=context)
+        
+        static_counter = 0
+        prev_best_fitness = nan
+
+        while generation_counter.generation() < self.max_generation:
+        
+            if verbose:
+                util.print_population(parents, context['leap']['generation'])
+
+            for i, parents in enumerate(subpopulations):
+
+                context['leap']['current_subpopulation'] = i
+
+                velocities[i] = update_velocities(parents, velocities[i], self.w, self.pa, self.ga)
+
+                parents = pipe(
+                               parents,
+                               update_position(velocities = velocities[i], bounds = self.bounds, lr = self.lr),
+                               ops.evaluate,
+                               ops.pool(size = -1)
+                               )
+
+            population_best = max(chain(*subpopulations))
+
+            if isclose(population_best.fitness, prev_best_fitness, abs_tol=10**-3):
+                static_counter += 1
+            else:
+                static_counter = 0
+
+            prev_best_fitness = population_best.fitness
+
+            if static_counter > 200:
+                break
+
+            if generation_counter.generation()%self.migration_gap == 0:
+                subpopulations = random_migrate(subpopulations, self.pop_size, self.swarms)
+
+            generation_counter()  # increment to the next generation
+
+        #swap step
+        population = list(chain(*subpopulations))
+        population = list(swap(population))
+        population = Individual.evaluate_population(population)
+
+        if verbose:
+            util.print_population(parents, context['leap']['generation'])
+
+        return get_genome_pop_best(population)
+
+
 def main():
 
     import simulation as sim
@@ -491,8 +697,9 @@ def main():
     y = np.array([1549.5*vars.n, 1550.5*vars.n])
     x = np.sum(sim.R(vars.A[:, None], y[None, :], vars.I[None, :], vars.dA[None, :]) ,axis=-1)
 
-    model = ev.genetic_algorithm_binary(max_generation=50, pop_size=150)
+    model = ev.dynamic_multi_swarm_particle_swarm_optimization()
     y_hat = model.predict(x)
+    print("y = "+str(y))
     print("y_hat = "+str(y_hat))
     print(np.mean(np.abs(y_hat-y)))
 
