@@ -35,15 +35,15 @@ from sklearn.mixture import GaussianMixture
 
 def stack(func):
     '''Decorator for allowing predict to accept multiple requests'''
-    def stacked(*args, **kwargs):
-        try:
-            x = kwargs['x']
-        except KeyError:  
-            x = args[1]
-        if len(x.shape)==1:
-            return func(*args, **kwargs)
+    def stacked(self, x, verbose=False):
+        shape = x.shape
+        if len(shape)==1:
+            return func(self, x, verbose)
         else:
-            return np.stack([func(*args, **kwargs) for k in x])
+            Y_hat = np.empty((shape[0], vars.FBGN))
+            for i, k in enumerate(x):
+                Y_hat[i] = func(self, k, verbose)
+            return Y_hat
     return stacked
 
 # ---------------------------------------------------------------------------- #
@@ -88,8 +88,8 @@ class Individual_np(Individual):
     
     __rmul__ = __mul__
 
-class Individual_placeholder(Individual):
-    '''Simplified Individual that serves as a placeholder for genome and fitness pairs
+class Individual_simple(Individual):
+    '''Simplified Individual that serves as a container for genome and fitness pairs
     '''
     def __init__(self, genome, fitness):
         self.genome = genome
@@ -100,7 +100,7 @@ class Individual_placeholder(Individual):
 
     def clone(self):
         new_genome = deepcopy(self.genome)
-        cloned = Individual_placeholder(new_genome, self.fitness)
+        cloned = Individual_simple(new_genome, self.fitness)
         return cloned
 
 
@@ -110,25 +110,19 @@ class Individual_hist(Individual_np):
 
     def __init__(self, genome, decoder=None, problem=None):
         super().__init__(genome, decoder, problem)
-        self.best = Individual_placeholder(genome, nan)
+        self.best = Individual_simple(genome, nan)
 
-    def evaluate_imp(self):
-        """ This is the evaluate 'implementation' called by
-            self.evaluate().   It's intended to be optionally over-ridden by
-            sub-classes to give an opportunity to pass in ancillary data to
-            the evaluate process either by tailoring the problem interface or
-            that of the given decoder.
-        """
+    def evaluate(self):
         self.fitness = super().evaluate_imp()
         #update individual best
         if self > self.best:
-            self.best = Individual_placeholder.clone(self)
+            self.best = Individual_simple.clone(self)
 
         #update subpopulation best
         i = context['leap']['current_subpopulation']
-        subpop_best = context['leap']['population_best'][i]
-        if self > subpop_best:
-            context['leap']['population_best'][i] = Individual_placeholder.clone(self)
+        population_best = context['leap']['population_best']
+        if self > population_best[i]:
+            population_best[i] = Individual_simple.clone(self)
 
         return self.fitness
 
@@ -161,7 +155,7 @@ class FBGDecoder_binary(Decoder):
     def __repr__(self):
         return type(self).__name__ + "()"
 
-# ---------------------------------- Problem --------------------------------- #
+# ---------------------------------- Problems--------------------------------- #
 
 class FBGProblem(ScalarProblem):
 
@@ -176,6 +170,8 @@ class FBGProblem(ScalarProblem):
 #                                  Operators                                   #
 # ---------------------------------------------------------------------------- #
 
+# -------------------------------- Genome Swap ------------------------------- #
+
 @curry
 # yield all permutations of each genome
 def swap(population: Iterator) -> Iterator:
@@ -188,7 +184,6 @@ def swap(population: Iterator) -> Iterator:
             yield individual
 
 @curry
-@iteriter_op
 # yield permutations of each genome stochastically
 def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
 
@@ -204,8 +199,9 @@ def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
                 individual.genome = list(genome)
                 yield individual
 
+# ------------------------- Genetic Algorithm Binary ------------------------- #
+
 @curry
-@iteriter_op
 def sort_genome(population: Iterator)-> Iterator:
     """ Sort genome to place larger I first """
     for ind in population:
@@ -224,22 +220,23 @@ def sort_genome(population: Iterator)-> Iterator:
         ind.genome = np.concatenate((I, A_b))
         yield ind
 
+# -------------------------- Differential Evolution -------------------------- #
+
 @curry
-@iteriter_op
+@listiter_op
 # differential step of differential evolution algorithm
-def diff(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+def diff(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
     # F: Differential weight $F /in [0,2]$
     # p_diff: crossover probability $p_diff /in [0,1]
     # n: number of genes 
 
-    pop = list(individual_itr)
-    N = len(pop)
+    N = len(population)
     for i in range(N):        
-        original = pop[i]
+        original = population[i]
         individual = original.clone()
 
         id_diff = _select_samples(i, N)
-        A,B,C = pop[id_diff]
+        A,B,C = population[id_diff]
         V = A + F*(B-C)
 
         id_swap = np.random.rand(n) < p_diff
@@ -254,18 +251,18 @@ def diff(individual_itr: Iterator, F: float = 0.8, p_diff:float = 0.9, n: int = 
 @curry
 @listiter_op
 # differential step and swap step of swap differential evolution algorithm
-def diff_swap(pop: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+def diff_swap(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
     # F: Differential weight $F /in [0,2]$
     # p_diff: crossover probability $p_diff /in [0,1]
     # n: number of genes 
 
-    N = len(pop)
+    N = len(population)
     for i in range(N):        
-        original = pop[i]
+        original = population[i]
         individual = original.clone()
 
         id_diff = _select_samples(i, N)
-        A,B,C = [pop[i] for i in id_diff]
+        A,B,C = [population[i] for i in id_diff]
         V = A + F*(B-C)
 
         id_swap = np.random.rand(n) < p_diff
@@ -287,6 +284,8 @@ def diff_swap(pop: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iter
         else:
             yield individual
 
+# ------------------------ Particle Swarm Optimization ----------------------- #
+
 @curry
 def update_position(parents, velocities, bounds, lr):
     for ind, v in zip(parents, velocities):
@@ -294,7 +293,7 @@ def update_position(parents, velocities, bounds, lr):
         ind.genome = ind.genome.clip(*bounds)
         yield ind
         
-def random_migrate(subpopulations, pop_size, swarms, migration_gap):
+def random_migrate(subpopulations, pop_size, swarms):
     #flatten
     population = list(chain(*subpopulations))
     #shuffle
@@ -318,7 +317,7 @@ def bool2float(a):
     return np.dot(a, to_float)
 
 def partial_decode(genome):
-    """ return I and then A_b from genome """
+    """ return I and then A_b from binary genome """
     I, A_b = np.split(genome, 2)
     I = np.stack(np.split(I, vars.FBGN))
     I = bool2float(I)
@@ -639,7 +638,7 @@ class particle_swarm_optimization():
                                                 decoder=FBGDecoder(),
                                                 problem=FBGProblem(x))
 
-        context['leap']['population_best']=[Individual_placeholder.clone(population[0])]
+        context['leap']['population_best']=[Individual_simple.clone(population[0])]
 
         context['leap']['current_subpopulation'] = 0
 
@@ -697,7 +696,7 @@ class dynamic_multi_swarm_particle_swarm_optimization():
                                                 decoder=FBGDecoder(),
                                                 problem=FBGProblem(x)) for _ in range(self.swarms)]
 
-        context['leap']['population_best']=[Individual_placeholder.clone(pop[0]) for pop in subpopulations]
+        context['leap']['population_best']=[Individual_simple.clone(pop[0]) for pop in subpopulations]
 
         # Evaluate initial population
         for i, population in enumerate(subpopulations):
@@ -755,7 +754,7 @@ class dynamic_multi_swarm_particle_swarm_optimization():
             generation_counter()  # increment to the next generation
 
         #swap step
-        population = list(chain(*subpopulations))
+        population = chain(*subpopulations)
         population = list(swap(population))
         population = Individual.evaluate_population(population)
 
