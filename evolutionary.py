@@ -1,4 +1,8 @@
+import operator
+from math import nan, isclose
+from copy import deepcopy
 from toolz import pipe
+from itertools import chain
 
 from leap_ec.individual import Individual
 from leap_ec.decoder import Decoder
@@ -13,8 +17,8 @@ from leap_ec.real_rep.ops import mutate_gaussian
 from leap_ec import util
 
 from toolz import curry
-from leap_ec.ops import iteriter_op
-from typing import Iterator
+from leap_ec.ops import iteriter_op, listiter_op
+from typing import Iterator, List
 from itertools import permutations  
 
 from simulation import X
@@ -24,6 +28,81 @@ import random
 from math import factorial
 
 from sklearn.mixture import GaussianMixture
+
+# ---------------------------------------------------------------------------- #
+#                                  Decorators                                  #
+# ---------------------------------------------------------------------------- #
+
+def stack(func):
+    '''Decorator for allowing predict to accept multiple requests'''
+    def stacked(*args, **kwargs):
+        try:
+            x = kwargs['x']
+        except KeyError:  
+            x = args[1]
+        if len(x.shape)==1:
+            return func(*args, **kwargs)
+        else:
+            return np.stack([func(*args, **kwargs) for k in x])
+    return stacked
+
+# ---------------------------------------------------------------------------- #
+#                               Auxiliary Classes                              #
+# ---------------------------------------------------------------------------- #
+
+# -------------------------------- Individuals ------------------------------- #
+
+class Individual_np(Individual):
+    '''Individual with numpy genome that allows for easier and efficient 
+    implementation of interindividual algebra'''
+    def __init__(self, genome, decoder=None, problem=None):
+        genome = np.array(genome)
+        super().__init__(genome, decoder, problem)
+    
+    def __add__(self, other):
+        individual = self.clone()
+        individual.genome += other.genome
+        return individual
+
+    def __iadd__(self, other):
+        individual.genome += other.genome
+        return individual
+
+    def __sub__(self, other):
+        individual = self.clone()
+        individual.genome -= other.genome
+        return individual
+
+    def __isub__(self, other):
+        individual.genome -= other.genome
+        return individual
+
+    def __mul__(self, other):
+        individual = self.clone()
+        individual.genome *= other
+        return individual
+
+    def __imul__(self, other):
+        individual.genome *= other
+        return individual
+    
+    __rmul__ = __mul__
+
+class Individual_placeholder(Individual):
+    '''Simplified Individual that serves as a placeholder for genome and fitness pairs
+    '''
+    def __init__(self, genome, fitness):
+        self.genome = genome
+        if fitness:
+            self.fitness = fitness
+        else:
+            self.fitness = nan
+
+    def clone(self):
+        new_genome = deepcopy(self.genome)
+        cloned = Individual_placeholder(new_genome, self.fitness)
+        return cloned
+
 
 class Individual_hist(Individual_np):
     ''' Individual with memory of best state genome and fitness
@@ -52,6 +131,9 @@ class Individual_hist(Individual_np):
             context['leap']['population_best'][i] = Individual_placeholder.clone(self)
 
         return self.fitness
+
+# --------------------------------- Decoders --------------------------------- #
+
 class FBGDecoder(Decoder):
 
     def __init__(self):
@@ -64,23 +146,6 @@ class FBGDecoder(Decoder):
 
     def __repr__(self):
         return type(self).__name__ + "()"
-
-to_float = np.exp2(np.arange(10)) #transform array
-to_float = to_float/np.sum(to_float) #normalize
-
-def bool2float(a):
-    # Transforms size 10 bool to float between 0 and 1
-    return np.dot(a, to_float)
-
-def partial_decode(genome):
-    """ return I and then A_b from genome """
-    I, A_b = np.split(genome, 2)
-    I = np.stack(np.split(I, vars.FBGN))
-    I = bool2float(I)
-    yield I
-    A_b = np.stack(np.split(A_b, vars.FBGN))
-    A_b = vars.A0 - vars.D + 2*vars.D*bool2float(A_b)
-    yield A_b
 
 
 class FBGDecoder_binary(Decoder):
@@ -96,6 +161,7 @@ class FBGDecoder_binary(Decoder):
     def __repr__(self):
         return type(self).__name__ + "()"
 
+# ---------------------------------- Problem --------------------------------- #
 
 class FBGProblem(ScalarProblem):
 
@@ -106,19 +172,20 @@ class FBGProblem(ScalarProblem):
     def evaluate(self, phenome, *args, **kwargs):
         return np.sum((self.x - phenome)**2)
 
+# ---------------------------------------------------------------------------- #
+#                                  Operators                                   #
+# ---------------------------------------------------------------------------- #
 
 @curry
-@iteriter_op
 # yield all permutations of each genome
-def swap(individual_itr: Iterator) -> Iterator:
+def swap(population: Iterator) -> Iterator:
 
-    for individual in individual_itr:
+    for individual in population:
         genome_perm = permutations(individual.genome)
         for genome in genome_perm:
             individual = individual.clone()
-            individual.genome = list(genome)
+            individual.genome = np.array(genome)
             yield individual
-
 
 @curry
 @iteriter_op
@@ -136,7 +203,6 @@ def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
                 individual = individual.clone()
                 individual.genome = list(genome)
                 yield individual
-
 
 @curry
 @iteriter_op
@@ -157,7 +223,6 @@ def sort_genome(population: Iterator)-> Iterator:
         
         ind.genome = np.concatenate((I, A_b))
         yield ind
-
 
 @curry
 @iteriter_op
@@ -210,9 +275,6 @@ def diff_swap(pop: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iter
 
         individual_swap = individual.clone()
         id_swap = random.sample(list(range(n)), k = 2)
-        #aux = individual.genome[id_swap[1]]
-        #individual_swap.genome[id_swap[1]] = individual_swap.genome[id_swap[0]] 
-        #individual_swap.genome[id_swap[0]] = aux
 
         individual_swap.genome[id_swap] = individual_swap.genome[id_swap[::-1]]        
         individual_swap.evaluate()
@@ -241,6 +303,32 @@ def random_migrate(subpopulations, pop_size, swarms, migration_gap):
     subpopulations = [population[i:i+pop_size] for i in range(0, swarms*pop_size, pop_size)]
 
     return subpopulations
+
+# ---------------------------------------------------------------------------- #
+#                              Auxiliary Functions                             #
+# ---------------------------------------------------------------------------- #
+
+# --------------------------- Binary Representation -------------------------- #
+
+to_float = np.exp2(np.arange(10)) #transform array
+to_float = to_float/np.sum(to_float) #normalize
+
+def bool2float(a):
+    # Transforms size 10 bool to float between 0 and 1
+    return np.dot(a, to_float)
+
+def partial_decode(genome):
+    """ return I and then A_b from genome """
+    I, A_b = np.split(genome, 2)
+    I = np.stack(np.split(I, vars.FBGN))
+    I = bool2float(I)
+    yield I
+    A_b = np.stack(np.split(A_b, vars.FBGN))
+    A_b = vars.A0 - vars.D + 2*vars.D*bool2float(A_b)
+    yield A_b
+
+# -------------------------- Differential Evolution -------------------------- #
+
 def _select_samples(candidate, N):
     """
     obtain 3 random integers from range(N),
@@ -251,7 +339,11 @@ def _select_samples(candidate, N):
     id_list = random.sample(idx, k=3) 
     return id_list
 
+# ---------------------------------- General --------------------------------- #
+
 def get_genome(population):
+    ''' Get genome from population
+    '''
     return np.array([individual.genome for individual in population])
 
 def get_genome_best(population):
@@ -264,6 +356,9 @@ def get_genome_pop_best(population):
     '''
     best_individual = max(population) 
     return best_individual.genome
+
+# -------------------------- Distributed Estimation -------------------------- #
+
 def get_top(dist):
     #get most probable cluster
     top_cluster_idx = np.argmax(dist.weights_)
@@ -272,6 +367,8 @@ def get_top(dist):
 
 def sample(dist):
     return dist.sample()[0]
+
+# ------------------------ Particle Swarm Optimization ----------------------- #
 
 def update_velocities(parents, velocities, w, pa, ga):
     N = len(parents)
@@ -283,6 +380,10 @@ def update_velocities(parents, velocities, w, pa, ga):
     subpop_best = context['leap']['population_best'][i]
     return w*velocities + pa*r*(particle_best_genome - parents_genome) + ga*q*(subpop_best.genome - parents_genome)
 
+# ---------------------------------------------------------------------------- #
+#                         Genetic Algorithm Estimators                         #
+# ---------------------------------------------------------------------------- #
+    
 class DistributedEstimation():
     def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, n = vars.FBGN, threshold = 1*vars.n, k = 10):
         self.pop_size = pop_size
@@ -292,21 +393,15 @@ class DistributedEstimation():
         self.threshold = threshold
         self.k = k
 
+    @stack
     def predict(self, x, verbose=False):
-        if len(x.shape)==1:
-            return self._predict(x, verbose)
-        else:
-            return np.stack([self._predict(k, verbose) for k in x])
-
-
-    def _predict(self, x, verbose):
-        parents = Individual.create_population(self.pop_size,
+        parents = Individual_np.create_population(self.pop_size,
                                         initialize=create_real_vector(((self.bounds, ) * self.n) ),
                                         decoder=FBGDecoder(),
                                         problem=FBGProblem(x))
 
         # Evaluate initial population/
-        parents = Individual.evaluate_population(parents)
+        parents = Individual_np.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -339,11 +434,11 @@ class DistributedEstimation():
                 dist.weights_[0]=1
 
             new_parents_genome = dist.sample(self.pop_size)[0]
-            new_parents = [Individual(genome, decoder=FBGDecoder(), problem=FBGProblem(x)) for genome in new_parents_genome]
-            new_parents = Individual.evaluate_population(new_parents)
+            new_parents = [Individual_np(genome, decoder=FBGDecoder(), problem=FBGProblem(x)) for genome in new_parents_genome]
+            new_parents = Individual_np.evaluate_population(new_parents)
             parents = offspring + new_parents
 
-            best_individual = Individual(get_top(dist), decoder=FBGDecoder(),
+            best_individual = Individual_np(get_top(dist), decoder=FBGDecoder(),
                                          problem=FBGProblem(x))
             best_individual.evaluate()
 
@@ -367,22 +462,15 @@ class swap_differential_evolution():
         self.F = F
         self.p_diff = p_diff
 
-
+    @stack
     def predict(self, x, verbose=False):
-        if len(x.shape)==1:
-            return self._predict(x, verbose)
-        else:
-            return np.stack([self._predict(k, verbose) for k in x])
-
-
-    def _predict(self, x, verbose):
-        parents = Individual.create_population(self.pop_size,
+        parents = Individual_np.create_population(self.pop_size,
                                                 initialize=create_real_vector(((self.bounds, ) * 2) ),
                                                 decoder=FBGDecoder(),
                                                 problem=FBGProblem(x))
 
         # Evaluate initial population
-        parents = Individual.evaluate_population(parents)
+        parents = Individual_np.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -425,21 +513,15 @@ class genetic_algorithm_real():
         self.p_swap = p_swap
         self.std = std
 
+    @stack
     def predict(self, x, verbose=False):
-        if len(x.shape)==1:
-            return self._predict(x, verbose)
-        else:
-            return np.stack([self._predict(k, verbose) for k in x])
-
-
-    def _predict(self, x, verbose):
-        parents = Individual.create_population(self.pop_size,
-                                                initialize=create_real_vector(((self.bounds, ) * 2) ),
+        parents = Individual_np.create_population(self.pop_size,
+                                                initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
                                                 decoder=FBGDecoder(),
                                                 problem=FBGProblem(x))
 
         # Evaluate initial population
-        parents = Individual.evaluate_population(parents)
+        parents = Individual_np.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -488,22 +570,16 @@ class genetic_algorithm_binary():
         self.p_swap = p_swap
         self.p_mut = p_mut
 
+    @stack
     def predict(self, x, verbose=False):
-        if len(x.shape)==1:
-            return self._predict(x, verbose)
-        else:
-            return np.stack([self._predict(k, verbose) for k in x])
-
-
-    def _predict(self, x, verbose):
         N=self.FBGN*2*10 # Two 10-bit chromosomes per FBG
-        parents = Individual.create_population(self.pop_size,
+        parents = Individual_np.create_population(self.pop_size,
                                                 initialize=create_binary_sequence(N),
                                                 decoder=FBGDecoder_binary(),
                                                 problem=FBGProblem(x))
 
         # Evaluate initial population
-        parents = Individual.evaluate_population(parents)
+        parents = Individual_np.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -702,7 +778,6 @@ def main():
     print("y = "+str(y))
     print("y_hat = "+str(y_hat))
     print(np.mean(np.abs(y_hat-y)))
-
 
 
 if __name__ == "__main__":
