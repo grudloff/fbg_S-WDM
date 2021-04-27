@@ -21,9 +21,9 @@ from leap_ec.ops import iteriter_op, listiter_op
 from typing import Iterator, List
 from itertools import permutations  
 
-from simulation import X
+from fbg_swdm.simulation import X
 import numpy as np
-import variables as vars
+import fbg_swdm.variables as vars
 import random
 from math import factorial
 
@@ -57,7 +57,7 @@ class Individual_op(Individual):
     def __init__(self, genome, decoder=None, problem=None):
         genome = np.array(genome)
         super().__init__(genome, decoder, problem)
-    
+
     def __iadd__(self, other):
         self.genome += getattr(other, 'genome', other)
         return self
@@ -84,7 +84,7 @@ class Individual_op(Individual):
         individual = self.clone()
         individual *= other
         return individual
-
+    
     __rmul__ = __mul__
     
     def clip(self, bounds):
@@ -774,7 +774,7 @@ def main():
     y = np.array([1549.5*vars.n, 1550.5*vars.n])
     x = np.sum(sim.R(vars.A[:, None], y[None, :], vars.I[None, :], vars.dA[None, :]) ,axis=-1)
 
-    model = ev.dynamic_multi_swarm_particle_swarm_optimization()
+    model = ev.model = ev.genetic_algorithm_real(max_generation=50, pop_size=150)
     y_hat = model.predict(x)
     print("y = "+str(y))
     print("y_hat = "+str(y_hat))

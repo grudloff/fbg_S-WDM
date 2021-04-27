@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from variables import *
-from simulation import R
+from fbg_swdm.variables import *
+from fbg_swdm.simulation import R
 
 def mae(a, b):
   return np.mean(np.abs(a-b))

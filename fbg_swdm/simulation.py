@@ -4,7 +4,7 @@ import numpy as np
 from numpy import log as ln
 from numpy import exp as exp
 
-from variables import *
+from fbg_swdm.variables import *
 #A = np.linspace(-2, 2, N);\
 
 #reflection spectrum
