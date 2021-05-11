@@ -201,6 +201,15 @@ def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
                 individual.genome = list(genome)
                 yield individual
 
+@curry
+# yield one permutation of each genome stochastically
+def single_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
+
+    for individual in individual_itr:
+        id_swap = random.sample(list(range(vars.FBGN)), k = 2)
+        individual.genome[id_swap] = individual.genome[id_swap[::-1]]   
+        yield individual
+
 # ------------------------- Genetic Algorithm Binary ------------------------- #
 
 @curry
@@ -224,8 +233,9 @@ def sort_genome(population: Iterator)-> Iterator:
 
 # -------------------------- Differential Evolution -------------------------- #
 
-@curry
+
 @listiter_op
+@curry
 # differential step of differential evolution algorithm
 def diff(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
     # F: Differential weight $F /in [0,2]$
@@ -234,21 +244,29 @@ def diff(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> It
 
     N = len(population)
     for i in range(N):        
-        original = population[i]
-        individual = original.clone()
+        individual = population[i]
 
         id_diff = _select_samples(i, N)
-        A,B,C = population[id_diff]
-        V = A + F*(B-C)
+        A,B,C = [population[i] for i in id_diff]
+        V = individual.clone()
+        V.genome = A.genome + F*(B.genome-C.genome)
 
         id_swap = np.random.rand(n) < p_diff
         # TODO add random index?
         individual.genome[id_swap] = V.genome[id_swap] 
-        individual.evaluate()
-        if original > individual:
-            yield original
-        else:
             yield individual
+
+@curry
+def one_on_one_compare(populations, parents=None):
+    '''Compare each parent with its child'''
+    if parents:
+        populations = (populations, parents)
+  
+    for ind1, ind2 in zip(*populations):
+        yield max(ind1, ind2)
+
+def evaluate_populations(populations):
+    return (ops.evaluate(pop) for pop in populations)
 
 @curry
 @listiter_op
@@ -265,7 +283,7 @@ def diff_swap(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) 
 
         id_diff = _select_samples(i, N)
         A,B,C = [population[i] for i in id_diff]
-        V = A + F*(B-C)
+        V.genome = A.genome + F*(B.genome-C.genome)
 
         id_swap = np.random.rand(n) < p_diff
         # TODO add random index?
@@ -485,9 +503,20 @@ class swap_differential_evolution():
         #util.print_population(parents, context['leap']['generation'])
 
             offspring = pipe(
-                                parents,
-                                diff_swap(F=self.F, p_diff=self.p_diff),
-                                ops.pool(size = -1)
+                             iter(parents),
+                             ops.clone(),
+                             ops.pool(size=-1),
+                             diff(F=self.F, p_diff=self.p_diff),
+                             ops.evaluate,
+                             ops.pool(size=-1),
+                             juxt(# Parallel operations
+                                  identity, #pass as is
+                                  compose(ops.evaluate, single_swap, ops.clone, iter), # clone, swap and evaluate
+                                  ),
+                             one_on_one_compare, #compare two populations pair by pair
+                             one_on_one_compare(parents = parents),
+                             ops.pool(size=-1)
+
                             )
 
             parents = offspring
