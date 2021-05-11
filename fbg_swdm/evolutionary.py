@@ -52,44 +52,11 @@ def stack(func):
 
 # -------------------------------- Individuals ------------------------------- #
 
-class Individual_op(Individual):
-    '''Individual with numpy genome with interindividual genome operations'''
+class Individual_numpy(Individual):
+    '''Individual with numpy genome'''
     def __init__(self, genome, decoder=None, problem=None):
         genome = np.array(genome)
         super().__init__(genome, decoder, problem)
-
-    def __iadd__(self, other):
-        self.genome += getattr(other, 'genome', other)
-        return self
-    
-    def __add__(self, other):
-        individual = self.clone()
-        individual += other
-        return individual
-
-    def __isub__(self, other):
-        self.genome -= getattr(other, 'genome', other)
-        return self
-
-    def __sub__(self, other):
-        individual = self.clone()
-        individual -= other
-        return individual
-
-    def __imul__(self, other):
-        self.genome *= getattr(other, 'genome', other)
-        return self
-
-    def __mul__(self, other):
-        individual = self.clone()
-        individual *= other
-        return individual
-    
-    __rmul__ = __mul__
-    
-    def clip(self, bounds):
-        self.genome = self.genome.clip(*bounds)
-        return self
 
 class Individual_simple(Individual):
     '''Simplified Individual that serves as a container for genome and fitness pairs
@@ -107,7 +74,7 @@ class Individual_simple(Individual):
         return cloned
 
 
-class Individual_hist(Individual_op):
+class Individual_hist(Individual_numpy):
     ''' Individual with memory of best state genome and fitness
     '''
 
@@ -309,9 +276,14 @@ def diff_swap(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) 
 @curry
 def update_position(parents, velocities, bounds, lr):
     for ind, v in zip(parents, velocities):
-        ind += v * lr
-        ind.clip(bounds)
+        ind.genome += v * lr
         yield ind
+        
+@curry
+def clip(population, bounds):
+    for individual in population:
+        individual.genome = individual.genome.clip(*bounds)
+        return individual
         
 def random_migrate(subpopulations, pop_size, swarms):
     #flatten
@@ -414,13 +386,13 @@ class DistributedEstimation():
 
     @stack
     def predict(self, x, verbose=False):
-        parents = Individual_op.create_population(self.pop_size,
+        parents = Individual_numpy.create_population(self.pop_size,
                                         initialize=create_real_vector(((self.bounds, ) * self.n) ),
                                         decoder=FBGDecoder(),
                                         problem=FBGProblem(x))
 
         # Evaluate initial population/
-        parents = Individual_op.evaluate_population(parents)
+        parents = Individual_numpy.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -453,11 +425,11 @@ class DistributedEstimation():
                 dist.weights_[0]=1
 
             new_parents_genome = dist.sample(self.pop_size)[0]
-            new_parents = [Individual_op(genome, decoder=FBGDecoder(), problem=FBGProblem(x)) for genome in new_parents_genome]
-            new_parents = Individual_op.evaluate_population(new_parents)
+            new_parents = [Individual_numpy(genome, decoder=FBGDecoder(), problem=FBGProblem(x)) for genome in new_parents_genome]
+            new_parents = Individual_numpy.evaluate_population(new_parents)
             parents = offspring + new_parents
 
-            best_individual = Individual_op(get_top(dist), decoder=FBGDecoder(),
+            best_individual = Individual_numpy(get_top(dist), decoder=FBGDecoder(),
                                          problem=FBGProblem(x))
             best_individual.evaluate()
 
@@ -483,13 +455,13 @@ class swap_differential_evolution():
 
     @stack
     def predict(self, x, verbose=False):
-        parents = Individual_op.create_population(self.pop_size,
+        parents = Individual_numpy.create_population(self.pop_size,
                                                 initialize=create_real_vector(((self.bounds, ) * 2) ),
                                                 decoder=FBGDecoder(),
                                                 problem=FBGProblem(x))
 
         # Evaluate initial population
-        parents = Individual_op.evaluate_population(parents)
+        parents = Individual_numpy.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -545,13 +517,13 @@ class genetic_algorithm_real():
 
     @stack
     def predict(self, x, verbose=False):
-        parents = Individual_op.create_population(self.pop_size,
+        parents = Individual_numpy.create_population(self.pop_size,
                                                 initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
                                                 decoder=FBGDecoder(),
                                                 problem=FBGProblem(x))
 
         # Evaluate initial population
-        parents = Individual_op.evaluate_population(parents)
+        parents = Individual_numpy.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -603,13 +575,13 @@ class genetic_algorithm_binary():
     @stack
     def predict(self, x, verbose=False):
         N=self.FBGN*2*10 # Two 10-bit chromosomes per FBG
-        parents = Individual_op.create_population(self.pop_size,
+        parents = Individual_numpy.create_population(self.pop_size,
                                                 initialize=create_binary_sequence(N),
                                                 decoder=FBGDecoder_binary(),
                                                 problem=FBGProblem(x))
 
         # Evaluate initial population
-        parents = Individual_op.evaluate_population(parents)
+        parents = Individual_numpy.evaluate_population(parents)
         best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
@@ -693,7 +665,8 @@ class particle_swarm_optimization():
             velocities = update_velocities(population, velocities, self.w, self.pa, self.ga)
 
             population = pipe(population,
-                           update_position(velocities = velocities, bounds = self.bounds, lr = self.lr),
+                           update_position(velocities = velocities, lr = self.lr),
+                           clip(bounds = self.bounds),
                            ops.evaluate,
                            ops.pool(size = -1))
 
