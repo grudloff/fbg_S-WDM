@@ -394,7 +394,7 @@ def get_genome_best(population):
 def get_genome_pop_best(population):
     '''Get best genome of population
     '''
-    best_individual = max(population)
+    best_individual = max(population) 
     return best_individual.genome
 
 
@@ -417,6 +417,135 @@ def update_velocities(parents, velocities, w, pa, ga):
 # --------------------------------------------------------------------------- #
 #                         Genetic Algorithm Estimators                        #
 # --------------------------------------------------------------------------- #
+
+
+class genetic_algorithm_binary():
+    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.FBGN,
+                 threshold=1*vars.n, p_swap=1, p_mut=0.1):
+        self.pop_size = pop_size
+        self.max_generation = max_generation
+        self.FBGN = FBGN
+        self.threshold = threshold
+        self.p_swap = p_swap
+        self.p_mut = p_mut
+
+    @stack
+    def predict(self, x, verbose=False):
+        N = self.FBGN*2*10  # Two 10-bit chromosomes per FBG
+        p_mut = self.p_mut*N
+        parents = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_binary_sequence(N),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   )
+
+        # Evaluate initial population
+        parents = Individual_numpy.evaluate_population(parents)
+        best_individual = ops.truncation_selection(parents, 1)[0]
+
+        # print initial, random population
+        if verbose:
+            util.print_population(parents, generation=0)
+
+        generation_counter = util.inc_generation(context=context)
+
+        while generation_counter.generation() < self.max_generation:
+
+            # util.print_population(parents, context['leap']['generation'])
+
+            offspring = pipe(
+                                parents,
+                                ops.stoc_pair_selection(),
+                                ops.clone,
+                                ops.one_point_crossover(p=self.p_swap),
+                                mutate_bitflip(expected_num_mutations=p_mut),
+                                sort_genome,
+                                ops.evaluate,
+                                ops.pool(size=self.pop_size),
+                                ops.truncation_selection(size=self.pop_size,
+                                                         parents=parents)
+                            )
+
+            parents = offspring
+
+            best_individual = parents[0]  # truncation_selection sorts parents
+
+            # if best_individual.fitness < self.threshold:
+            #     return best_individual.genome
+
+            generation_counter()  # increment to the next generation
+
+        if verbose:
+            util.print_population(parents, context['leap']['generation'])
+
+        _, y_hat = partial_decode(best_individual.genome)
+
+        return y_hat
+
+
+class genetic_algorithm_real():
+    def __init__(self, pop_size=30, max_generation=100, bounds=vars.bounds,
+                 threshold=1*vars.n, p_swap=0.3, std=0.01*vars.n):
+        self.pop_size = pop_size
+        self.max_generation = max_generation
+        self.bounds = bounds
+        self.threshold = threshold
+        self.p_swap = p_swap
+        self.std = std
+
+    @stack
+    def predict(self, x, verbose=False):
+        bounds = ((self.bounds, ) * vars.FBGN)
+        parents = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_real_vector(bounds),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   )
+
+        # Evaluate initial population
+        parents = Individual_numpy.evaluate_population(parents)
+        best_individual = ops.truncation_selection(parents, 1)[0]
+
+        # print initial, random population
+        if verbose:
+            util.print_population(parents, generation=0)
+
+        generation_counter = util.inc_generation(context=context)
+
+        while generation_counter.generation() < self.max_generation:
+
+            # util.print_population(parents, context['leap']['generation'])
+
+            offspring = pipe(
+                                parents,
+                                ops.stoc_pair_selection(),
+                                ops.clone,
+                                ops.uniform_crossover(p_swap=self.p_swap),
+                                mutate_gaussian(std=self.std,
+                                                expected_num_mutations=1,
+                                                hard_bounds=self.bounds),
+                                single_swap(p_swap=0.3),
+                                ops.evaluate,
+                                ops.pool(size=-1),
+                                ops.truncation_selection(size=self.pop_size,
+                                                         parents=parents)
+                            )
+
+            parents = offspring
+
+            best_individual = parents[0]  # truncation_selection sorts parents
+
+            # if best_individual.fitness < self.threshold:
+            #     return best_individual.genome
+
+            generation_counter()  # increment to the next generation
+
+        if verbose:
+            util.print_population(parents, context['leap']['generation'])
+
+        return np.array(best_individual.genome)
 
 
 class DistributedEstimation():
@@ -543,135 +672,6 @@ class swap_differential_evolution():
             util.print_population(parents, context['leap']['generation'])
 
         return np.array(best_individual.genome)
-
-
-class genetic_algorithm_real():
-    def __init__(self, pop_size=30, max_generation=100, bounds=vars.bounds,
-                 threshold=1*vars.n, p_swap=0.3, std=0.01*vars.n):
-        self.pop_size = pop_size
-        self.max_generation = max_generation
-        self.bounds = bounds
-        self.threshold = threshold
-        self.p_swap = p_swap
-        self.std = std
-
-    @stack
-    def predict(self, x, verbose=False):
-        bounds = ((self.bounds, ) * vars.FBGN)
-        parents = Individual_numpy.create_population(
-                                   self.pop_size,
-                                   initialize=create_real_vector(bounds),
-                                   decoder=FBGDecoder(),
-                                   problem=FBGProblem(x)
-                                   )
-
-        # Evaluate initial population
-        parents = Individual_numpy.evaluate_population(parents)
-        best_individual = ops.truncation_selection(parents, 1)[0]
-
-        # print initial, random population
-        if verbose:
-            util.print_population(parents, generation=0)
-
-        generation_counter = util.inc_generation(context=context)
-
-        while generation_counter.generation() < self.max_generation:
-
-            # util.print_population(parents, context['leap']['generation'])
-
-            offspring = pipe(
-                                parents,
-                                ops.stoc_pair_selection(),
-                                ops.clone,
-                                ops.uniform_crossover(p_swap=self.p_swap),
-                                mutate_gaussian(std=self.std,
-                                                expected_num_mutations=1,
-                                                hard_bounds=self.bounds),
-                                single_swap(p_swap=0.3),
-                                ops.evaluate,
-                                ops.pool(size=-1),
-                                ops.truncation_selection(size=self.pop_size,
-                                                         parents=parents)
-                            )
-
-            parents = offspring
-
-            best_individual = parents[0]  # truncation_selection sorts parents
-
-            # if best_individual.fitness < self.threshold:
-            #     return best_individual.genome
-
-            generation_counter()  # increment to the next generation
-
-        if verbose:
-            util.print_population(parents, context['leap']['generation'])
-
-        return np.array(best_individual.genome)
-
-
-class genetic_algorithm_binary():
-    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.FBGN,
-                 threshold=1*vars.n, p_swap=1, p_mut=0.1):
-        self.pop_size = pop_size
-        self.max_generation = max_generation
-        self.FBGN = FBGN
-        self.threshold = threshold
-        self.p_swap = p_swap
-        self.p_mut = p_mut
-
-    @stack
-    def predict(self, x, verbose=False):
-        N = self.FBGN*2*10  # Two 10-bit chromosomes per FBG
-        p_mut = self.p_mut*N
-        parents = Individual_numpy.create_population(
-                                   self.pop_size,
-                                   initialize=create_binary_sequence(N),
-                                   decoder=FBGDecoder(),
-                                   problem=FBGProblem(x)
-                                   )
-
-        # Evaluate initial population
-        parents = Individual_numpy.evaluate_population(parents)
-        best_individual = ops.truncation_selection(parents, 1)[0]
-
-        # print initial, random population
-        if verbose:
-            util.print_population(parents, generation=0)
-
-        generation_counter = util.inc_generation(context=context)
-
-        while generation_counter.generation() < self.max_generation:
-
-            # util.print_population(parents, context['leap']['generation'])
-
-            offspring = pipe(
-                                parents,
-                                ops.stoc_pair_selection(),
-                                ops.clone,
-                                ops.one_point_crossover(p=self.p_swap),
-                                mutate_bitflip(expected_num_mutations=p_mut),
-                                sort_genome,
-                                ops.evaluate,
-                                ops.pool(size=self.pop_size),
-                                ops.truncation_selection(size=self.pop_size,
-                                                         parents=parents)
-                            )
-
-            parents = offspring
-
-            best_individual = parents[0]  # truncation_selection sorts parents
-
-            # if best_individual.fitness < self.threshold:
-            #     return best_individual.genome
-
-            generation_counter()  # increment to the next generation
-
-        if verbose:
-            util.print_population(parents, context['leap']['generation'])
-
-        _, y_hat = partial_decode(best_individual.genome)
-
-        return y_hat
 
 
 class particle_swarm_optimization():
