@@ -313,7 +313,8 @@ def diff_swap(population: List, F: float = 0.8, p_diff: float = 0.9,
 
 
 @curry
-def update_position(parents, velocities, bounds, lr):
+def update_position(parents, velocities, lr, w, pa, ga):
+    update_velocities(parents, velocities, w, pa, ga)
     for ind, v in zip(parents, velocities):
         ind.genome += v * lr
         yield ind
@@ -401,6 +402,7 @@ def get_genome_pop_best(population):
 # ------------------------ Particle Swarm Optimization ---------------------- #
 
 def update_velocities(parents, velocities, w, pa, ga):
+
     N = len(parents)
     r = np.random.rand(N, vars.FBGN)
     q = np.random.rand(N, vars.FBGN)
@@ -409,10 +411,10 @@ def update_velocities(parents, velocities, w, pa, ga):
     i = context['leap']['current_subpopulation']
     subpop_best = context['leap']['population_best'][i]
 
-    new_velocities = w*velocities
+    new_velocities = w*velocities[i]
     new_velocities += pa*r*(particle_best_genome - parents_genome)
     new_velocities += ga*q*(subpop_best.genome - parents_genome)
-    return new_velocities
+    velocities[i] = new_velocities
 
 # --------------------------------------------------------------------------- #
 #                         Genetic Algorithm Estimators                        #
@@ -705,7 +707,7 @@ class particle_swarm_optimization():
         population = Individual_hist.evaluate_population(population)
 
         # Initialize random velocities in ]0,1]
-        velocities = np.random.rand(self.pop_size, vars.FBGN)
+        velocities = np.random.rand(1, self.pop_size, vars.FBGN)
         # Move to ]-diff(bounds),diff(bounds)]
         velocities = (velocities-0.5)*2*np.diff(self.bounds)
 
@@ -719,12 +721,10 @@ class particle_swarm_optimization():
 
             # util.print_population(parents, context['leap']['generation'])
 
-            velocities = update_velocities(population, velocities, self.w,
-                                           self.pa, self.ga)
-
             population = pipe(population,
                               update_position(velocities=velocities,
-                                              lr=self.lr),
+                                              lr=self.lr, w=self.w, pa=self.pa,
+                                              ga=self.ga),
                               clip(bounds=self.bounds),
                               ops.evaluate,
                               ops.pool(size=-1))
@@ -793,13 +793,11 @@ class dynamic_multi_swarm_particle_swarm_optimization():
 
                 context['leap']['current_subpopulation'] = i
 
-                velocities[i] = update_velocities(parents, velocities[i],
-                                                  self.w, self.pa, self.ga)
-
                 parents = pipe(
                                parents,
-                               update_position(velocities=velocities[i],
-                                               bounds=self.bounds, lr=self.lr),
+                               update_position(velocities=velocities,
+                                               lr=self.lr, w=self.w,
+                                               pa=self.pa, ga=self.ga),
                                ops.evaluate,
                                ops.pool(size=-1)
                                )
