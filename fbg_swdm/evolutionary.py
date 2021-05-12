@@ -170,17 +170,36 @@ def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
 
 @curry
 # yield one permutation of each genome stochastically
-def single_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
+def single_swap(individual_itr: Iterator, p_swap: int = 1) -> Iterator:
 
     for individual in individual_itr:
-        id_swap = random.sample(list(range(vars.FBGN)), k = 2)
+        yield individual
+        if random.random() < p_swap:
+            individual = individual.clone()
+            id_swap = random.sample(list(range(vars.FBGN)), k=2)
         individual.genome[id_swap] = individual.genome[id_swap[::-1]]   
         yield individual
 
-# ------------------------- Genetic Algorithm Binary ------------------------- #
+# ------------------------- Distributed Estimation ------------------------- #
+
 
 @curry
-def sort_genome(population: Iterator)-> Iterator:
+def update_sample(population, dist, sample_size):
+    '''Update and then sample Gaussian distribution '''
+    dist.fit(get_genome(population))
+
+    # if np.any(dist.weights_ < 1e-15):
+    #     dist.weights_[0] = 1
+
+    new_pop_genome = dist.sample(sample_size)[0]
+    for genome in new_pop_genome:
+        ind = population[0].clone()
+        ind.genome = genome
+        yield ind
+
+# ------------------------ Genetic Algorithm Binary ------------------------ #
+
+
     """ Sort genome to place larger I first """
     for ind in population:
         I = next(partial_decode(ind.genome)) # decode I from genome
@@ -348,18 +367,8 @@ def get_genome_pop_best(population):
     best_individual = max(population) 
     return best_individual.genome
 
-# -------------------------- Distributed Estimation -------------------------- #
 
-def get_top(dist):
-    #get most probable cluster
-    top_cluster_idx = np.argmax(dist.weights_)
-    #return center of top cluster
-    return dist.means_[top_cluster_idx]
-
-def sample(dist):
-    return dist.sample()[0]
-
-# ------------------------ Particle Swarm Optimization ----------------------- #
+# ------------------------ Particle Swarm Optimization ---------------------- #
 
 def update_velocities(parents, velocities, w, pa, ga):
     N = len(parents)
@@ -376,24 +385,27 @@ def update_velocities(parents, velocities, w, pa, ga):
 # ---------------------------------------------------------------------------- #
     
 class DistributedEstimation():
-    def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, n = vars.FBGN, threshold = 1*vars.n, k = 10):
+    def __init__(self, pop_size=10, max_generation=500, bounds=vars.bounds,
+                 n=10, threshold=0.01, sample_size=100):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.bounds = bounds
         self.n = n
         self.threshold = threshold
-        self.k = k
+        self.sample_size = sample_size
 
     @stack
     def predict(self, x, verbose=False):
-        parents = Individual_numpy.create_population(self.pop_size,
-                                        initialize=create_real_vector(((self.bounds, ) * self.n) ),
+        bounds = ((self.bounds, ) * vars.FBGN)  # repeat bounds for each FBG
+        parents = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_real_vector(bounds),
                                         decoder=FBGDecoder(),
-                                        problem=FBGProblem(x))
+                                   problem=FBGProblem(x)
+                                   )
 
         # Evaluate initial population/
         parents = Individual_numpy.evaluate_population(parents)
-        best_individual = ops.truncation_selection(parents, 1)[0]
 
         # print initial, random population
         if verbose:
@@ -401,47 +413,34 @@ class DistributedEstimation():
 
         generation_counter = util.inc_generation(context=context)
 
-        #TODO Authors use n_components=10 when we know there is one global minima
-        # and !n-1 local minimas, so there should be !n clusters
-        dist = GaussianMixture(warm_start=False, n_components=factorial(self.n), reg_covar=1e-10)
+        dist = GaussianMixture(warm_start=True,
+                               n_components=self.n, reg_covar=1e-10)
 
         while generation_counter.generation() < self.max_generation:
         
             if verbose == 2:
                 util.print_population(parents, context['leap']['generation'])
 
-            offspring = pipe(
+            parents = pipe(
                                 parents,
-                                ops.truncation_selection(size = self.k),
+                           update_sample(dist=dist,
+                                         sample_size=self.sample_size),
+                           clip(bounds=self.bounds),
+                           ops.evaluate,
+                           ops.pool(size=-1),
+                           ops.truncation_selection(size=self.pop_size,
+                                                    parents=parents)
                             )
 
-            dist.fit(get_genome(offspring))
-            
-            #TODO In the paper they sample only (n-m) 
-            # and keep the previous top n, to not loose info
-            # But this shouldn't be necessary as the distribution
-            # is updated not reconstructed from scratch
-            if np.any(dist.weights_ < 1e-15):
-                dist.weights_[0]=1
-
-            new_parents_genome = dist.sample(self.pop_size)[0]
-            new_parents = [Individual_numpy(genome, decoder=FBGDecoder(), problem=FBGProblem(x)) for genome in new_parents_genome]
-            new_parents = Individual_numpy.evaluate_population(new_parents)
-            parents = offspring + new_parents
-
-            best_individual = Individual_numpy(get_top(dist), decoder=FBGDecoder(),
-                                         problem=FBGProblem(x))
-            best_individual.evaluate()
-
-            #if best_individual.fitness < self.threshold:
-            #    return best_individual.genome
+            if parents[0].fitness < self.threshold:
+                return parents[0].genome
 
             generation_counter()  # increment to the next generation
 
         if verbose:
             util.print_population(parents, context['leap']['generation'])
 
-        return np.array(best_individual.genome)
+        return parents[0].genome
 
 
 class swap_differential_evolution():
