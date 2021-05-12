@@ -1,7 +1,6 @@
-import operator
 from math import nan, isclose
 from copy import deepcopy
-from toolz import pipe
+from toolz import pipe, juxt, compose, identity
 from itertools import chain
 
 from leap_ec.individual import Individual
@@ -17,27 +16,27 @@ from leap_ec.real_rep.ops import mutate_gaussian
 from leap_ec import util
 
 from toolz import curry
-from leap_ec.ops import iteriter_op, listiter_op
+from leap_ec.ops import listiter_op
 from typing import Iterator, List
-from itertools import permutations  
+from itertools import permutations
 
 from fbg_swdm.simulation import X
 import numpy as np
 import fbg_swdm.variables as vars
 import random
-from math import factorial
 
 from sklearn.mixture import GaussianMixture
 
-# ---------------------------------------------------------------------------- #
-#                                  Decorators                                  #
-# ---------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------- #
+#                                 Decorators                                 #
+# -------------------------------------------------------------------------- #
+
 
 def stack(func):
     '''Decorator for allowing predict to accept multiple requests'''
     def stacked(self, x, verbose=False):
         shape = x.shape
-        if len(shape)==1:
+        if len(shape) == 1:
             return func(self, x, verbose)
         else:
             Y_hat = np.empty((shape[0], vars.FBGN))
@@ -46,11 +45,12 @@ def stack(func):
             return Y_hat
     return stacked
 
-# ---------------------------------------------------------------------------- #
-#                               Auxiliary Classes                              #
-# ---------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------- #
+#                               Auxiliary Classes                            #
+# -------------------------------------------------------------------------- #
 
-# -------------------------------- Individuals ------------------------------- #
+# ------------------------------- Individuals ------------------------------ #
+
 
 class Individual_numpy(Individual):
     '''Individual with numpy genome'''
@@ -58,8 +58,10 @@ class Individual_numpy(Individual):
         genome = np.array(genome)
         super().__init__(genome, decoder, problem)
 
+
 class Individual_simple(Individual):
-    '''Simplified Individual that serves as a container for genome and fitness pairs
+    '''Simplified Individual that serves as a container for genome and fitness
+    pairs
     '''
     def __init__(self, genome, fitness):
         self.genome = genome
@@ -84,11 +86,11 @@ class Individual_hist(Individual_numpy):
 
     def evaluate(self):
         self.fitness = super().evaluate_imp()
-        #update individual best
+        # update individual best
         if self > self.best:
             self.best = Individual_simple.clone(self)
 
-        #update subpopulation best
+        # update subpopulation best
         i = context['leap']['current_subpopulation']
         population_best = context['leap']['population_best']
         if self > population_best[i]:
@@ -96,7 +98,8 @@ class Individual_hist(Individual_numpy):
 
         return self.fitness
 
-# --------------------------------- Decoders --------------------------------- #
+# -------------------------------- Decoders -------------------------------- #
+
 
 class FBGDecoder(Decoder):
 
@@ -124,7 +127,8 @@ class FBGDecoder_binary(Decoder):
     def __repr__(self):
         return type(self).__name__ + "()"
 
-# ---------------------------------- Problems--------------------------------- #
+# --------------------------------- Problems-------------------------------- #
+
 
 class FBGProblem(ScalarProblem):
 
@@ -135,11 +139,12 @@ class FBGProblem(ScalarProblem):
     def evaluate(self, phenome, *args, **kwargs):
         return np.sum((self.x - phenome)**2)
 
-# ---------------------------------------------------------------------------- #
-#                                  Operators                                   #
-# ---------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------- #
+#                                  Operators                                 #
+# -------------------------------------------------------------------------- #
 
-# -------------------------------- Genome Swap ------------------------------- #
+# ------------------------------- Genome Swap ------------------------------ #
+
 
 @curry
 # yield all permutations of each genome
@@ -152,6 +157,7 @@ def swap(population: Iterator) -> Iterator:
             individual.genome = np.array(genome)
             yield individual
 
+
 @curry
 # yield permutations of each genome stochastically
 def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
@@ -160,13 +166,14 @@ def stoc_swap(individual_itr: Iterator, p_swap: int = 0.5) -> Iterator:
         genome_perm = permutations(individual.genome)
         # always yield original
         next(genome_perm)
-        yield  individual 
+        yield individual
         for genome in genome_perm:
             # TODO replace p_swap with expected permutations to try
-            if random.random() < p_swap: 
+            if random.random() < p_swap:
                 individual = individual.clone()
                 individual.genome = list(genome)
                 yield individual
+
 
 @curry
 # yield one permutation of each genome stochastically
@@ -177,8 +184,8 @@ def single_swap(individual_itr: Iterator, p_swap: int = 1) -> Iterator:
         if random.random() < p_swap:
             individual = individual.clone()
             id_swap = random.sample(list(range(vars.FBGN)), k=2)
-        individual.genome[id_swap] = individual.genome[id_swap[::-1]]   
-        yield individual
+            individual.genome[id_swap] = individual.genome[id_swap[::-1]]
+            yield individual
 
 # ------------------------- Distributed Estimation ------------------------- #
 
@@ -200,144 +207,164 @@ def update_sample(population, dist, sample_size):
 # ------------------------ Genetic Algorithm Binary ------------------------ #
 
 
+@curry
+def sort_genome(population: Iterator) -> Iterator:
     """ Sort genome to place larger I first """
     for ind in population:
-        I = next(partial_decode(ind.genome)) # decode I from genome
-        indx = np.argsort(I) # indeces of sorted I
-        indx = indx[::-1] # larger first\
+        I_bin = next(partial_decode(ind.genome))  # decode I from genome
+        indx = np.argsort(I_bin)  # index of sorted I
+        indx = indx[::-1]  # larger first
 
-        I, A_b = np.split(ind.genome, 2) #split I from A_b chromosomes
-        I = np.array(np.split(I, vars.FBGN)) # split into chromosomes
-        A_b = np.array(np.split(A_b, vars.FBGN))
-        I = np.take(I, indx, axis=0) #sort chromosomes according to indx
-        A_b = np.take(A_b, indx, axis=0)
-        I = np.concatenate(I) #combine sorted chromosomes
-        A_b = np.concatenate(A_b)
-        
-        ind.genome = np.concatenate((I, A_b))
+        # split I from A_b chromosomes
+        I_float, A_b_float = np.split(ind.genome, 2)
+        # split into chromosomes
+        I_float = np.array(np.split(I_float, vars.FBGN))
+        A_b_float = np.array(np.split(A_b_float, vars.FBGN))
+        # sort chromosomes according to indx
+        I_float = np.take(I_float, indx, axis=0)
+        A_b_float = np.take(A_b_float, indx, axis=0)
+        # combine sorted chromosomes
+        I_float = np.concatenate(I_float)
+        A_b_float = np.concatenate(A_b_float)
+        ind.genome = np.concatenate((I_float, A_b_float))
+
         yield ind
 
-# -------------------------- Differential Evolution -------------------------- #
+# ------------------------- Differential Evolution ------------------------- #
 
 
 @listiter_op
 @curry
 # differential step of differential evolution algorithm
-def diff(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+def diff(population: List, F: float = 0.8, p_diff: float = 0.9, n: int = 2
+         ) -> Iterator:
     # F: Differential weight $F /in [0,2]$
     # p_diff: crossover probability $p_diff /in [0,1]
-    # n: number of genes 
+    # n: number of genes
 
     N = len(population)
-    for i in range(N):        
+    for i in range(N):
         individual = population[i]
 
         id_diff = _select_samples(i, N)
-        A,B,C = [population[i] for i in id_diff]
+        A, B, C = [population[i] for i in id_diff]
         V = individual.clone()
         V.genome = A.genome + F*(B.genome-C.genome)
 
         id_swap = np.random.rand(n) < p_diff
         # TODO add random index?
-        individual.genome[id_swap] = V.genome[id_swap] 
-            yield individual
+        individual.genome[id_swap] = V.genome[id_swap]
+        yield individual
+
 
 @curry
 def one_on_one_compare(populations, parents=None):
     '''Compare each parent with its child'''
     if parents:
         populations = (populations, parents)
-  
+
     for ind1, ind2 in zip(*populations):
         yield max(ind1, ind2)
+
 
 def evaluate_populations(populations):
     return (ops.evaluate(pop) for pop in populations)
 
+
 @curry
 @listiter_op
 # differential step and swap step of swap differential evolution algorithm
-def diff_swap(population: List, F: float = 0.8, p_diff:float = 0.9, n: int = 2) -> Iterator:
+def diff_swap(population: List, F: float = 0.8, p_diff: float = 0.9,
+              n: int = 2) -> Iterator:
     # F: Differential weight $F /in [0,2]$
     # p_diff: crossover probability $p_diff /in [0,1]
-    # n: number of genes 
+    # n: number of genes
 
     N = len(population)
-    for i in range(N):        
+    for i in range(N):
         original = population[i]
         individual = original.clone()
 
         id_diff = _select_samples(i, N)
-        A,B,C = [population[i] for i in id_diff]
+        A, B, C = [population[i] for i in id_diff]
+        V = individual.clone()
         V.genome = A.genome + F*(B.genome-C.genome)
 
         id_swap = np.random.rand(n) < p_diff
         # TODO add random index?
-        individual.genome[id_swap] = V.genome[id_swap] 
+        individual.genome[id_swap] = V.genome[id_swap]
         individual.evaluate()
 
         individual_swap = individual.clone()
-        id_swap = random.sample(list(range(n)), k = 2)
+        id_swap = random.sample(list(range(n)), k=2)
 
-        individual_swap.genome[id_swap] = individual_swap.genome[id_swap[::-1]]        
+        individual_swap.genome[id_swap] = individual_swap.genome[id_swap[::-1]]
         individual_swap.evaluate()
 
         if individual_swap > individual:
             individual = individual_swap
 
-        if original > individual: # This is adjusted with maximize to mean 'better than'
+        if original > individual:  # original better than individual
             yield original
         else:
             yield individual
 
-# ------------------------ Particle Swarm Optimization ----------------------- #
+# ----------------------- Particle Swarm Optimization ---------------------- #
+
 
 @curry
 def update_position(parents, velocities, bounds, lr):
     for ind, v in zip(parents, velocities):
         ind.genome += v * lr
         yield ind
-        
+
+
 @curry
 def clip(population, bounds):
     for individual in population:
         individual.genome = individual.genome.clip(*bounds)
-        return individual
-        
+        yield individual
+
+
 def random_migrate(subpopulations, pop_size, swarms):
-    #flatten
+    # flatten
     population = list(chain(*subpopulations))
-    #shuffle
+    # shuffle
     random.shuffle(population)
-    #deflatten
-    subpopulations = [population[i:i+pop_size] for i in range(0, swarms*pop_size, pop_size)]
+    # deflatten
+    subpopulations = [population[i:i+pop_size]
+                      for i in range(0, swarms*pop_size, pop_size)]
 
     return subpopulations
 
-# ---------------------------------------------------------------------------- #
-#                              Auxiliary Functions                             #
-# ---------------------------------------------------------------------------- #
 
-# --------------------------- Binary Representation -------------------------- #
+# --------------------------------------------------------------------------- #
+#                              Auxiliary Functions                            #
+# --------------------------------------------------------------------------- #
 
-to_float = np.exp2(np.arange(10)) #transform array
-to_float = to_float/np.sum(to_float) #normalize
+# -------------------------- Binary Representation -------------------------- #
+
+to_float = np.exp2(np.arange(10))  # transform array
+to_float = to_float/np.sum(to_float)  # normalize
+
 
 def bool2float(a):
     # Transforms size 10 bool to float between 0 and 1
     return np.dot(a, to_float)
 
+
 def partial_decode(genome):
     """ return I and then A_b from binary genome """
-    I, A_b = np.split(genome, 2)
-    I = np.stack(np.split(I, vars.FBGN))
-    I = bool2float(I)
-    yield I
-    A_b = np.stack(np.split(A_b, vars.FBGN))
-    A_b = vars.A0 - vars.D + 2*vars.D*bool2float(A_b)
-    yield A_b
+    I_bin, A_b_bin = np.split(genome, 2)
+    I_bin = np.stack(np.split(I_bin, vars.FBGN))
+    I_float = bool2float(I_bin)
+    yield I_float
+    A_b_bin = np.stack(np.split(A_b_bin, vars.FBGN))
+    A_b_float = vars.A0 - vars.D + 2*vars.D*bool2float(A_b_bin)
+    yield A_b_float
 
-# -------------------------- Differential Evolution -------------------------- #
+# -------------------------- Differential Evolution ------------------------- #
+
 
 def _select_samples(candidate, N):
     """
@@ -345,26 +372,29 @@ def _select_samples(candidate, N):
     without replacement. You can't have the original candidate.
     """
     idx = list(range(N))
-    idx.pop(candidate) #remove candidate
-    id_list = random.sample(idx, k=3) 
+    idx.pop(candidate)  # remove candidate
+    id_list = random.sample(idx, k=3)
     return id_list
 
-# ---------------------------------- General --------------------------------- #
+# --------------------------------- General --------------------------------- #
+
 
 def get_genome(population):
     ''' Get genome from population
     '''
     return np.array([individual.genome for individual in population])
 
+
 def get_genome_best(population):
     ''' Get best genome of each Individual_hist of a population
     '''
     return np.array([individual.best.genome for individual in population])
 
+
 def get_genome_pop_best(population):
     '''Get best genome of population
     '''
-    best_individual = max(population) 
+    best_individual = max(population)
     return best_individual.genome
 
 
@@ -378,12 +408,17 @@ def update_velocities(parents, velocities, w, pa, ga):
     particle_best_genome = get_genome_best(parents)
     i = context['leap']['current_subpopulation']
     subpop_best = context['leap']['population_best'][i]
-    return w*velocities + pa*r*(particle_best_genome - parents_genome) + ga*q*(subpop_best.genome - parents_genome)
 
-# ---------------------------------------------------------------------------- #
-#                         Genetic Algorithm Estimators                         #
-# ---------------------------------------------------------------------------- #
-    
+    new_velocities = w*velocities
+    new_velocities += pa*r*(particle_best_genome - parents_genome)
+    new_velocities += ga*q*(subpop_best.genome - parents_genome)
+    return new_velocities
+
+# --------------------------------------------------------------------------- #
+#                         Genetic Algorithm Estimators                        #
+# --------------------------------------------------------------------------- #
+
+
 class DistributedEstimation():
     def __init__(self, pop_size=10, max_generation=500, bounds=vars.bounds,
                  n=10, threshold=0.01, sample_size=100):
@@ -400,7 +435,7 @@ class DistributedEstimation():
         parents = Individual_numpy.create_population(
                                    self.pop_size,
                                    initialize=create_real_vector(bounds),
-                                        decoder=FBGDecoder(),
+                                   decoder=FBGDecoder(),
                                    problem=FBGProblem(x)
                                    )
 
@@ -417,12 +452,12 @@ class DistributedEstimation():
                                n_components=self.n, reg_covar=1e-10)
 
         while generation_counter.generation() < self.max_generation:
-        
+
             if verbose == 2:
                 util.print_population(parents, context['leap']['generation'])
 
             parents = pipe(
-                                parents,
+                           parents,
                            update_sample(dist=dist,
                                          sample_size=self.sample_size),
                            clip(bounds=self.bounds),
@@ -430,7 +465,7 @@ class DistributedEstimation():
                            ops.pool(size=-1),
                            ops.truncation_selection(size=self.pop_size,
                                                     parents=parents)
-                            )
+                           )
 
             if parents[0].fitness < self.threshold:
                 return parents[0].genome
@@ -444,7 +479,8 @@ class DistributedEstimation():
 
 
 class swap_differential_evolution():
-    def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, threshold = 1*vars.n, F=0.8, p_diff=0.9):
+    def __init__(self, pop_size=30, max_generation=100, bounds=vars.bounds,
+                 threshold=1*vars.n, F=0.8, p_diff=0.9):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.bounds = bounds
@@ -454,10 +490,13 @@ class swap_differential_evolution():
 
     @stack
     def predict(self, x, verbose=False):
-        parents = Individual_numpy.create_population(self.pop_size,
-                                                initialize=create_real_vector(((self.bounds, ) * 2) ),
-                                                decoder=FBGDecoder(),
-                                                problem=FBGProblem(x))
+        bounds = ((self.bounds, ) * vars.FBGN)
+        parents = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_real_vector(bounds),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   )
 
         # Evaluate initial population
         parents = Individual_numpy.evaluate_population(parents)
@@ -471,7 +510,7 @@ class swap_differential_evolution():
 
         while generation_counter.generation() < self.max_generation:
 
-        #util.print_population(parents, context['leap']['generation'])
+            # util.print_population(parents, context['leap']['generation'])
 
             offspring = pipe(
                              iter(parents),
@@ -480,22 +519,23 @@ class swap_differential_evolution():
                              diff(F=self.F, p_diff=self.p_diff),
                              ops.evaluate,
                              ops.pool(size=-1),
-                             juxt(# Parallel operations
-                                  identity, #pass as is
-                                  compose(ops.evaluate, single_swap, ops.clone, iter), # clone, swap and evaluate
+                             juxt(  # Parallel operations
+                                  identity,  # pass as is
+                                  compose(ops.evaluate, single_swap, ops.clone,
+                                          iter),  # clone, swap and evaluate
                                   ),
-                             one_on_one_compare, #compare two populations pair by pair
-                             one_on_one_compare(parents = parents),
+                             one_on_one_compare,
+                             one_on_one_compare(parents=parents),
                              ops.pool(size=-1)
 
-                            )
+            )
 
             parents = offspring
 
             best_individual = ops.truncation_selection(parents, 1)[0]
 
-            #if best_individual.fitness < self.threshold:
-            #    return best_individual.genome
+            # if best_individual.fitness < self.threshold:
+            #     return best_individual.genome
 
             generation_counter()  # increment to the next generation
 
@@ -503,10 +543,11 @@ class swap_differential_evolution():
             util.print_population(parents, context['leap']['generation'])
 
         return np.array(best_individual.genome)
- 
+
 
 class genetic_algorithm_real():
-    def __init__(self, pop_size=30, max_generation=100, bounds = vars.bounds, threshold = 1*vars.n, p_swap=0.3, std=0.01*vars.n):
+    def __init__(self, pop_size=30, max_generation=100, bounds=vars.bounds,
+                 threshold=1*vars.n, p_swap=0.3, std=0.01*vars.n):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.bounds = bounds
@@ -516,10 +557,13 @@ class genetic_algorithm_real():
 
     @stack
     def predict(self, x, verbose=False):
-        parents = Individual_numpy.create_population(self.pop_size,
-                                                initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
-                                                decoder=FBGDecoder(),
-                                                problem=FBGProblem(x))
+        bounds = ((self.bounds, ) * vars.FBGN)
+        parents = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_real_vector(bounds),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   )
 
         # Evaluate initial population
         parents = Individual_numpy.evaluate_population(parents)
@@ -533,26 +577,29 @@ class genetic_algorithm_real():
 
         while generation_counter.generation() < self.max_generation:
 
-        #util.print_population(parents, context['leap']['generation'])
+            # util.print_population(parents, context['leap']['generation'])
 
             offspring = pipe(
                                 parents,
                                 ops.stoc_pair_selection(),
                                 ops.clone,
-                                ops.uniform_crossover(p_swap = self.p_swap),
-                                mutate_gaussian(std = self.std, expected_num_mutations = 1, hard_bounds = self.bounds),
-                                swap,
+                                ops.uniform_crossover(p_swap=self.p_swap),
+                                mutate_gaussian(std=self.std,
+                                                expected_num_mutations=1,
+                                                hard_bounds=self.bounds),
+                                single_swap(p_swap=0.3),
                                 ops.evaluate,
-                                ops.pool(size = self.pop_size),
-                                ops.truncation_selection(size = self.pop_size, parents = parents)
+                                ops.pool(size=-1),
+                                ops.truncation_selection(size=self.pop_size,
+                                                         parents=parents)
                             )
 
             parents = offspring
 
-            best_individual = parents[0] #truncation_selection sorts parents
+            best_individual = parents[0]  # truncation_selection sorts parents
 
-            #if best_individual.fitness < self.threshold:
-            #    return best_individual.genome
+            # if best_individual.fitness < self.threshold:
+            #     return best_individual.genome
 
             generation_counter()  # increment to the next generation
 
@@ -563,7 +610,8 @@ class genetic_algorithm_real():
 
 
 class genetic_algorithm_binary():
-    def __init__(self, pop_size=20, max_generation=500, FBGN = vars.FBGN, threshold = 1*vars.n, p_swap=1, p_mut=0.1):
+    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.FBGN,
+                 threshold=1*vars.n, p_swap=1, p_mut=0.1):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.FBGN = FBGN
@@ -573,11 +621,14 @@ class genetic_algorithm_binary():
 
     @stack
     def predict(self, x, verbose=False):
-        N=self.FBGN*2*10 # Two 10-bit chromosomes per FBG
-        parents = Individual_numpy.create_population(self.pop_size,
-                                                initialize=create_binary_sequence(N),
-                                                decoder=FBGDecoder_binary(),
-                                                problem=FBGProblem(x))
+        N = self.FBGN*2*10  # Two 10-bit chromosomes per FBG
+        p_mut = self.p_mut*N
+        parents = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_binary_sequence(N),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   )
 
         # Evaluate initial population
         parents = Individual_numpy.evaluate_population(parents)
@@ -591,26 +642,27 @@ class genetic_algorithm_binary():
 
         while generation_counter.generation() < self.max_generation:
 
-        #util.print_population(parents, context['leap']['generation'])
+            # util.print_population(parents, context['leap']['generation'])
 
-            offspring = pipe(   
+            offspring = pipe(
                                 parents,
                                 ops.stoc_pair_selection(),
                                 ops.clone,
-                                ops.one_point_crossover(p = self.p_swap),
-                                mutate_bitflip(expected_num_mutations = self.p_mut*N),
+                                ops.one_point_crossover(p=self.p_swap),
+                                mutate_bitflip(expected_num_mutations=p_mut),
                                 sort_genome,
                                 ops.evaluate,
-                                ops.pool(size = self.pop_size),
-                                ops.truncation_selection(size = self.pop_size, parents = parents)
+                                ops.pool(size=self.pop_size),
+                                ops.truncation_selection(size=self.pop_size,
+                                                         parents=parents)
                             )
 
             parents = offspring
 
-            best_individual = parents[0] #truncation_selection sorts parents
+            best_individual = parents[0]  # truncation_selection sorts parents
 
-            #if best_individual.fitness < self.threshold:
-            #    return best_individual.genome
+            # if best_individual.fitness < self.threshold:
+            #     return best_individual.genome
 
             generation_counter()  # increment to the next generation
 
@@ -623,33 +675,39 @@ class genetic_algorithm_binary():
 
 
 class particle_swarm_optimization():
-    def __init__(self, pop_size=50, max_generation=1000, bounds = vars.bounds, threshold = 1*vars.n, w=0.6, pa=2, ga=2, lr=0.1):
+    def __init__(self, pop_size=50, max_generation=1000, bounds=vars.bounds,
+                 threshold=1*vars.n, w=0.6, pa=2, ga=2, lr=0.1):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.bounds = bounds
         self.threshold = threshold
-        self.w = w # previous velocity weight constant 
-        self.pa = pa # population acceleration
-        self.ga = ga # group acceleration
-        self.lr = lr # learning rate
+        self.w = w  # previous velocity weight constant
+        self.pa = pa  # population acceleration
+        self.ga = ga  # group acceleration
+        self.lr = lr  # learning rate
 
     @stack
     def predict(self, x, verbose=False):
-        population = Individual_hist.create_population(self.pop_size,
-                                                initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
-                                                decoder=FBGDecoder(),
-                                                problem=FBGProblem(x))
+        bounds = ((self.bounds, ) * vars.FBGN)
+        population = Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_real_vector(bounds),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   )
 
-        context['leap']['population_best']=[Individual_simple.clone(population[0])]
+        context['leap']['population_best'] = [Individual_simple.clone(
+                                                                population[0])]
 
         context['leap']['current_subpopulation'] = 0
 
         # Evaluate initial population
         population = Individual_hist.evaluate_population(population)
 
-        # Initialize velocities 
-        velocities = np.random.rand(self.pop_size, vars.FBGN) # Initialize random velocities in ]0,1]
-        velocities = (velocities-0.5)*2*np.diff(self.bounds) # Move to ]-diff(bounds),diff(bounds)]
+        # Initialize random velocities in ]0,1]
+        velocities = np.random.rand(self.pop_size, vars.FBGN)
+        # Move to ]-diff(bounds),diff(bounds)]
+        velocities = (velocities-0.5)*2*np.diff(self.bounds)
 
         # print initial, random population
         if verbose:
@@ -659,89 +717,97 @@ class particle_swarm_optimization():
 
         while generation_counter.generation() < self.max_generation:
 
-        #util.print_population(parents, context['leap']['generation'])
+            # util.print_population(parents, context['leap']['generation'])
 
-            velocities = update_velocities(population, velocities, self.w, self.pa, self.ga)
+            velocities = update_velocities(population, velocities, self.w,
+                                           self.pa, self.ga)
 
             population = pipe(population,
-                           update_position(velocities = velocities, lr = self.lr),
-                           clip(bounds = self.bounds),
-                           ops.evaluate,
-                           ops.pool(size = -1))
+                              update_position(velocities=velocities,
+                                              lr=self.lr),
+                              clip(bounds=self.bounds),
+                              ops.evaluate,
+                              ops.pool(size=-1))
 
-            #if best_individual.fitness < self.threshold:
-            #    return best_individual.genome
+            # if best_individual.fitness < self.threshold:
+            #     return best_individual.genome
 
             generation_counter()  # increment to the next generation
 
         if verbose:
             util.print_population(population, context['leap']['generation'])
-        
+
         return get_genome_pop_best(population)
 
 
 class dynamic_multi_swarm_particle_swarm_optimization():
-    def __init__(self, pop_size=30, max_generation=1000, bounds = vars.bounds, w=0.6, pa=2, ga=2, lr=0.1, swarms=10, migration_gap=15):
+    def __init__(self, pop_size=30, max_generation=1000, bounds=vars.bounds,
+                 w=0.6, pa=2, ga=2, lr=0.1, swarms=10, migration_gap=15):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.bounds = bounds
-        self.w = w # previous velocity weight constant 
-        self.pa = pa # population acceleration
-        self.ga = ga # group acceleration
-        self.lr = lr # learning rate
-        self.swarms = swarms # number of swarms
+        self.w = w  # previous velocity weight constant
+        self.pa = pa  # population acceleration
+        self.ga = ga  # group acceleration
+        self.lr = lr  # learning rate
+        self.swarms = swarms  # number of swarms
         self.migration_gap = migration_gap
 
     @stack
     def predict(self, x, verbose=False):
-        subpopulations = [Individual_hist.create_population(self.pop_size,
-                                                initialize=create_real_vector(((self.bounds, ) * vars.FBGN) ),
-                                                decoder=FBGDecoder(),
-                                                problem=FBGProblem(x)) for _ in range(self.swarms)]
+        bounds = ((self.bounds, ) * vars.FBGN)
+        subpopulations = [Individual_numpy.create_population(
+                                   self.pop_size,
+                                   initialize=create_real_vector(bounds),
+                                   decoder=FBGDecoder(),
+                                   problem=FBGProblem(x)
+                                   ) for _ in range(self.swarms)]
 
-        context['leap']['population_best']=[Individual_simple.clone(pop[0]) for pop in subpopulations]
+        context['leap']['population_best'] = [Individual_simple.clone(pop[0])
+                                              for pop in subpopulations]
 
         # Evaluate initial population
         for i, population in enumerate(subpopulations):
-            context['leap']['current_subpopulation'] = i #required to assign population_best to current subpop
+            # required to assign population_best to current subpop
+            context['leap']['current_subpopulation'] = i
             Individual.evaluate_population(population)
 
-        # Initialize velocities 
-        velocities = np.random.rand(self.swarms, self.pop_size, vars.FBGN) # Initialize random velocities in ]0,1]
-        velocities = (velocities-0.5)*2*np.diff(self.bounds) # Move to ]-diff(bounds),diff(bounds)]
-
-        
+        # Initialize random velocities in ]0,1]
+        velocities = np.random.rand(self.swarms, self.pop_size, vars.FBGN)
+        # Move to ]-diff(bounds),diff(bounds)]
+        velocities = (velocities-0.5)*2*np.diff(self.bounds)
 
         # print initial, random population
         if verbose:
-            util.print_population(parents, generation=0)
+            for population in subpopulations:
+                util.print_population(population, generation=0)
 
         generation_counter = util.inc_generation(context=context)
-        
+
         static_counter = 0
         prev_best_fitness = nan
 
         while generation_counter.generation() < self.max_generation:
-        
-            if verbose:
-                util.print_population(parents, context['leap']['generation'])
 
             for i, parents in enumerate(subpopulations):
 
                 context['leap']['current_subpopulation'] = i
 
-                velocities[i] = update_velocities(parents, velocities[i], self.w, self.pa, self.ga)
+                velocities[i] = update_velocities(parents, velocities[i],
+                                                  self.w, self.pa, self.ga)
 
                 parents = pipe(
                                parents,
-                               update_position(velocities = velocities[i], bounds = self.bounds, lr = self.lr),
+                               update_position(velocities=velocities[i],
+                                               bounds=self.bounds, lr=self.lr),
                                ops.evaluate,
-                               ops.pool(size = -1)
+                               ops.pool(size=-1)
                                )
 
             population_best = max(chain(*subpopulations))
 
-            if isclose(population_best.fitness, prev_best_fitness, abs_tol=10**-3):
+            if isclose(population_best.fitness, prev_best_fitness,
+                       abs_tol=10**-3):
                 static_counter += 1
             else:
                 static_counter = 0
@@ -751,12 +817,17 @@ class dynamic_multi_swarm_particle_swarm_optimization():
             if static_counter > 200:
                 break
 
-            if generation_counter.generation()%self.migration_gap == 0:
-                subpopulations = random_migrate(subpopulations, self.pop_size, self.swarms)
+            if generation_counter.generation() % self.migration_gap == 0:
+                subpopulations = random_migrate(subpopulations, self.pop_size,
+                                                self.swarms)
+
+            if verbose:
+                for population in subpopulations:
+                    util.print_population(population, generation=0)
 
             generation_counter()  # increment to the next generation
 
-        #swap step
+        # swap step
         population = chain(*subpopulations)
         population = list(swap(population))
         population = Individual.evaluate_population(population)
@@ -765,22 +836,3 @@ class dynamic_multi_swarm_particle_swarm_optimization():
             util.print_population(parents, context['leap']['generation'])
 
         return get_genome_pop_best(population)
-
-
-def main():
-
-    import simulation as sim
-    import evolutionary as ev
-
-    y = np.array([1549.5*vars.n, 1550.5*vars.n])
-    x = np.sum(sim.R(vars.A[:, None], y[None, :], vars.I[None, :], vars.dA[None, :]) ,axis=-1)
-
-    model = ev.model = ev.genetic_algorithm_real(max_generation=50, pop_size=150)
-    y_hat = model.predict(x)
-    print("y = "+str(y))
-    print("y_hat = "+str(y_hat))
-    print(np.mean(np.abs(y_hat-y)))
-
-
-if __name__ == "__main__":
-    main()
