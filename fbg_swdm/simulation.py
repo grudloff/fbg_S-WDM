@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy import log as ln
 from numpy import exp as exp
+from math import sqrt
 
 from fbg_swdm.variables import A, I, dA, A0, D, FBGN, M, n, test_ratio
 # A = np.linspace(-2, 2, N);\
@@ -23,7 +24,7 @@ def gen_data(train_dist="mesh"):
 
     if train_dist == "mesh":
         y_train = np.linspace(A0-0.7*D, A0+0.7*D,
-                              np.sqrt(M, dtype='int'))  # 1d array
+                              int(sqrt(M)))  # 1d array
         y_train = np.meshgrid(y_train, y_train)  # 2d mesh from that array
         y_train = np.reshape(y_train, (FBGN, M)).T
 
