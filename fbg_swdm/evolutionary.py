@@ -528,6 +528,7 @@ class genetic_algorithm_binary(GeneticAlgo):
                         ops.clone,
                         one_point_crossover(p=self.p_swap),
                         mutate_bitflip(expected_num_mutations=self.ex_mut),
+                        to_np_array,
                         sort_genome,
                         ops.evaluate,
                         ops.pool(size=self.pop_size),
