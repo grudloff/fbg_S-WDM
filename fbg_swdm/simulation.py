@@ -23,7 +23,7 @@ def gen_data(train_dist="mesh"):
 
     if train_dist == "mesh":
         y_train = np.linspace(A0-0.7*D, A0+0.7*D,
-                              np.sqrt(M, casting='int'))  # 1d array
+                              np.sqrt(M, dtype='int'))  # 1d array
         y_train = np.meshgrid(y_train, y_train)  # 2d mesh from that array
         y_train = np.reshape(y_train, (FBGN, M)).T
 
