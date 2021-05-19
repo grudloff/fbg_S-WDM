@@ -143,6 +143,14 @@ class FBGProblem(ScalarProblem):
 #                                  Operators                                 #
 # -------------------------------------------------------------------------- #
 
+
+@curry
+def to_np_array(parents):
+    '''Convert genomes to numpy representation'''
+    for ind in parents:
+        ind.genome = np.array(ind.genome)
+        yield ind
+
 # ------------------------------- Genome Swap ------------------------------ #
 
 
@@ -566,6 +574,7 @@ class genetic_algorithm_real(GeneticAlgo):
                         mutate_gaussian(std=self.std,
                                         expected_num_mutations=1,
                                         hard_bounds=self.bounds),
+                        to_np_array,
                         single_swap(p_swap=0.3),
                         ops.evaluate,
                         ops.pool(size=self.pop_size),
@@ -591,7 +600,7 @@ class DistributedEstimation(GeneticAlgo):
                                       sample_size=self.pop_size),
                         clip(bounds=self.bounds),
                         ops.evaluate,
-                        ops.pool(size=-1),
+                        ops.pool(size=self.pop_size),
                         ops.truncation_selection(size=self.top_size,
                                                  parents=parents)
                         )
@@ -634,10 +643,10 @@ class swap_differential_evolution(GeneticAlgo):
             return pipe(
                         iter(parents),
                         ops.clone(),
-                        ops.pool(size=-1),
+                        ops.pool(size=self.pop_size),
                         diff(F=self.F, p_diff=self.p_diff, FBGN=self.FBGN),
                         ops.evaluate,
-                        ops.pool(size=-1),
+                        ops.pool(size=self.pop_size),
                         juxt(  # Parallel operations
                             identity,  # pass as is
                             compose(ops.evaluate, single_swap, ops.clone,
@@ -645,7 +654,7 @@ class swap_differential_evolution(GeneticAlgo):
                             ),
                         one_on_one_compare,
                         one_on_one_compare(parents=parents),
-                        ops.pool(size=-1)
+                        ops.pool(size=self.pop_size)
                         )
 
         self.pipeline = pipeline
@@ -669,7 +678,7 @@ class particle_swarm_optimization(GeneticAlgo):
                                         ga=self.ga),
                         clip(bounds=self.bounds),
                         ops.evaluate,
-                        ops.pool(size=-1)
+                        ops.pool(size=self.pop_size)
                         )
 
         self.pipeline = pipeline
@@ -722,7 +731,7 @@ class dynamic_multi_swarm_particle_swarm_optimization(GeneticAlgo):
                                         lr=self.lr, w=self.w,
                                         pa=self.pa, ga=self.ga),
                         ops.evaluate,
-                        ops.pool(size=-1)
+                        ops.pool(size=self.pop_size)
                         )
 
         self.pipeline = pipeline
