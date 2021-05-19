@@ -577,22 +577,22 @@ class genetic_algorithm_real(GeneticAlgo):
 
 
 class DistributedEstimation(GeneticAlgo):
-    def __init__(self, pop_size=10, max_generation=500, FBGN=vars.FBGN,
-                 threshold=0.01, bounds=vars.bounds, n=10, sample_size=100):
+    def __init__(self, pop_size=100, max_generation=500, FBGN=vars.FBGN,
+                 threshold=0.01, bounds=vars.bounds, m=2, top_size=10):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
-        self.n = n
-        self.sample_size = sample_size
+        self.m = m
+        self.top_size = top_size
 
         def pipeline(parents):
             return pipe(
                         parents,
                         update_sample(dist=self.dist,
-                                      sample_size=self.sample_size),
+                                      sample_size=self.pop_size),
                         clip(bounds=self.bounds),
                         ops.evaluate,
                         ops.pool(size=-1),
-                        ops.truncation_selection(size=self.pop_size,
+                        ops.truncation_selection(size=self.top_size,
                                                  parents=parents)
                         )
 
@@ -610,9 +610,11 @@ class DistributedEstimation(GeneticAlgo):
 
         # Evaluate initial population/
         parents = Individual_numpy.evaluate_population(parents)
+        parents = ops.truncation_selection(parents, size=self.top_size,
+                                           parents=parents)
 
-        self.dist = GaussianMixture(warm_start=True,
-                                    n_components=self.n, reg_covar=1e-10)
+        self.dist = GaussianMixture(warm_start=False,
+                                    n_components=self.m, reg_covar=1e-10)
 
         best_individual = self.loop(parents, verbose)
 
