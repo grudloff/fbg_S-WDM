@@ -59,6 +59,6 @@ def plot_sweep(model, d=0.6*n, normalize=True, rec_error=False, N=300):
         plt.figure(figsize=figsize)
         X_hat = np.sum(R(A[None, :, None], y_hat[:, None, :], I[None, None, :],
                          dA[None, None, :]), axis=-1)
-        plt.plot(y[:, 1]/n, np.sum(np.abs(X-X_hat), axis=1))
+        plt.plot(y[:, 1]/n, np.sum(np.abs(X - X_hat), axis=1))
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")

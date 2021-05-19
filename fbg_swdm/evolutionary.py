@@ -137,7 +137,7 @@ class FBGProblem(ScalarProblem):
         self.x = x
 
     def evaluate(self, phenome, *args, **kwargs):
-        return np.sum((self.x - phenome)**2)
+        return np.sum(np.abs(self.x - phenome))
 
 # -------------------------------------------------------------------------- #
 #                                  Operators                                 #
