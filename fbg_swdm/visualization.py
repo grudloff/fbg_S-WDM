@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from fbg_swdm.variables import figsize, n, p, A, dA, I, A0, D, FBGN
+from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 from fbg_swdm.simulation import R
 
 
@@ -20,21 +20,21 @@ def plot_dist(y, y_label=None, mean=False):
 
 # Plot sweep of one FBG with the other static
 def plot_sweep(model, d=0.6*n, normalize=True, rec_error=False, N=300):
-
-    y = np.zeros([N, FBGN])
+    
+    y = np.zeros([N, Q])
     # Static
-    y[:, 0] = A0
+    y[:, 0] = λ0
     # Sweep
-    y[:, 1] = np.linspace(A0-d, A0+d, N)
+    y[:, 1] = np.linspace(λ0-d, λ0+d, N)
 
     # broadcast shape: N, M, FBGN
-    X = np.sum(R(A[None, :, None], y[:, None, :], I[None, None, :],
-                 dA[None, None, :]), axis=-1)
+    X = np.sum(R(λ[None, :, None], y[:, None, :], A[None, None, :],
+                 Δλ[None, None, :]), axis=-1)
 
     if normalize:
-        X = X/np.sum(I)  # scale input
-        y_hat = A0+D*model.predict(X)
-        X = X*np.sum(I)
+        X = X/np.sum(A)  # scale input
+        y_hat = λ0+Δ*model.predict(X)
+        X = X*np.sum(A)
 
     else:
         y_hat = model.predict(X)
@@ -57,8 +57,8 @@ def plot_sweep(model, d=0.6*n, normalize=True, rec_error=False, N=300):
 
     if rec_error:
         plt.figure(figsize=figsize)
-        X_hat = np.sum(R(A[None, :, None], y_hat[:, None, :], I[None, None, :],
-                         dA[None, None, :]), axis=-1)
+        X_hat = np.sum(R(λ[None, :, None], y_hat[:, None, :], A[None, None, :],
+                         Δλ[None, None, :]), axis=-1)
         plt.plot(y[:, 1]/n, np.sum(np.abs(X - X_hat), axis=1))
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")

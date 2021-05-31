@@ -39,7 +39,7 @@ def stack(func):
         if len(shape) == 1:
             return func(self, x, verbose)
         else:
-            Y_hat = np.empty((shape[0], vars.FBGN))
+            Y_hat = np.empty((shape[0], vars.Q))
             for i, k in enumerate(x):
                 Y_hat[i] = func(self, k, verbose)
             return Y_hat
@@ -191,7 +191,7 @@ def single_swap(individual_itr: Iterator, p_swap: int = 1) -> Iterator:
         yield individual
         if random.random() < p_swap:
             individual = individual.clone()
-            id_swap = random.sample(list(range(vars.FBGN)), k=2)
+            id_swap = random.sample(list(range(vars.Q)), k=2)
             individual.genome[id_swap] = individual.genome[id_swap[::-1]]
             yield individual
 
@@ -226,8 +226,8 @@ def sort_genome(population: Iterator) -> Iterator:
         # split I from A_b chromosomes
         I_float, A_b_float = np.split(ind.genome, 2)
         # split into chromosomes
-        I_float = np.array(np.split(I_float, vars.FBGN))
-        A_b_float = np.array(np.split(A_b_float, vars.FBGN))
+        I_float = np.array(np.split(I_float, vars.Q))
+        A_b_float = np.array(np.split(A_b_float, vars.Q))
         # sort chromosomes according to indx
         I_float = np.take(I_float, indx, axis=0)
         A_b_float = np.take(A_b_float, indx, axis=0)
@@ -369,11 +369,11 @@ def bool2float(a):
 def partial_decode(genome):
     """ return I and then A_b from binary genome """
     I_bin, A_b_bin = np.split(genome, 2)
-    I_bin = np.stack(np.split(I_bin, vars.FBGN))
+    I_bin = np.stack(np.split(I_bin, vars.Q))
     I_float = bool2float(I_bin)
     yield I_float
-    A_b_bin = np.stack(np.split(A_b_bin, vars.FBGN))
-    A_b_float = vars.A0 - vars.D + 2*vars.D*bool2float(A_b_bin)
+    A_b_bin = np.stack(np.split(A_b_bin, vars.Q))
+    A_b_float = vars.λ0 - vars.Δ + 2*vars.Δ*bool2float(A_b_bin)
     yield A_b_float
 
 # -------------------------- Differential Evolution ------------------------- #
@@ -395,8 +395,8 @@ def select_samples(candidate, N):
 def update_velocities(parents, velocities, w, pa, ga):
 
     N = len(parents)
-    r = np.random.rand(N, vars.FBGN)
-    q = np.random.rand(N, vars.FBGN)
+    r = np.random.rand(N, vars.Q)
+    q = np.random.rand(N, vars.Q)
 
     parents_genome = get_genome(parents)
     particle_best_genome = get_genome_best(parents)
@@ -439,7 +439,7 @@ def get_genome_pop_best(population):
 # --------------------------------------------------------------------------- #
 
 class GeneticAlgo():
-    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.FBGN,
+    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.Q,
                  threshold=1*vars.n):
         self.pop_size = pop_size
         self.max_generation = max_generation
@@ -448,7 +448,7 @@ class GeneticAlgo():
 
     @stack
     def predict(self, x, verbose=False):
-        bounds = ((self.bounds, ) * vars.FBGN)
+        bounds = ((self.bounds, ) * vars.Q)
         parents = Individual_numpy.create_population(
                                    self.pop_size,
                                    initialize=create_real_vector(bounds),
@@ -514,7 +514,7 @@ class GeneticAlgo():
 
 
 class genetic_algorithm_binary(GeneticAlgo):
-    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.FBGN,
+    def __init__(self, pop_size=20, max_generation=500, FBGN=vars.Q,
                  threshold=1*vars.n, p_swap=1, p_mut=0.1):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.p_swap = p_swap
@@ -558,7 +558,7 @@ class genetic_algorithm_binary(GeneticAlgo):
 
 
 class genetic_algorithm_real(GeneticAlgo):
-    def __init__(self, pop_size=30, max_generation=100, FBGN=vars.FBGN,
+    def __init__(self, pop_size=30, max_generation=100, FBGN=vars.Q,
                  threshold=0.01, bounds=vars.bounds, p_swap=0.3,
                  std=0.01*vars.n):
         super().__init__(pop_size, max_generation, FBGN, threshold)
@@ -587,7 +587,7 @@ class genetic_algorithm_real(GeneticAlgo):
 
 
 class DistributedEstimation(GeneticAlgo):
-    def __init__(self, pop_size=100, max_generation=500, FBGN=vars.FBGN,
+    def __init__(self, pop_size=100, max_generation=500, FBGN=vars.Q,
                  threshold=0.01, bounds=vars.bounds, m=2, top_size=10):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
@@ -632,7 +632,7 @@ class DistributedEstimation(GeneticAlgo):
 
 
 class swap_differential_evolution(GeneticAlgo):
-    def __init__(self, pop_size=30, max_generation=100, FBGN=vars.FBGN,
+    def __init__(self, pop_size=30, max_generation=100, FBGN=vars.Q,
                  threshold=0.01, bounds=vars.bounds, F=0.8, p_diff=0.9):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
@@ -662,7 +662,7 @@ class swap_differential_evolution(GeneticAlgo):
 
 
 class particle_swarm_optimization(GeneticAlgo):
-    def __init__(self, pop_size=50, max_generation=1000, FBGN=vars.FBGN,
+    def __init__(self, pop_size=50, max_generation=1000, FBGN=vars.Q,
                  threshold=0.01, bounds=vars.bounds, w=0.6, pa=2, ga=2,
                  lr=0.1):
         super().__init__(pop_size, max_generation, FBGN, threshold)
@@ -686,7 +686,7 @@ class particle_swarm_optimization(GeneticAlgo):
 
     @stack
     def predict(self, x, verbose=False):
-        bounds = ((self.bounds, ) * vars.FBGN)
+        bounds = ((self.bounds, ) * vars.Q)
         parents = Individual_hist.create_population(
                                    self.pop_size,
                                    initialize=create_real_vector(bounds),
@@ -703,7 +703,7 @@ class particle_swarm_optimization(GeneticAlgo):
         parents = Individual_hist.evaluate_population(parents)
 
         # Initialize random velocities in ]0,1]
-        self.velocities = np.random.rand(1, self.pop_size, vars.FBGN)
+        self.velocities = np.random.rand(1, self.pop_size, vars.Q)
         # Move to ]-diff(bounds),diff(bounds)]
         self.velocities = (self.velocities-0.5)*2*np.diff(self.bounds)
 
@@ -713,7 +713,7 @@ class particle_swarm_optimization(GeneticAlgo):
 
 
 class dynamic_multi_swarm_particle_swarm_optimization(GeneticAlgo):
-    def __init__(self, pop_size=30, max_generation=1000, FBGN=vars.FBGN,
+    def __init__(self, pop_size=30, max_generation=1000, FBGN=vars.Q,
                  threshold=0.01, bounds=vars.bounds, w=0.6, pa=2, ga=2, lr=0.1,
                  swarms=10, migration_gap=15):
         super().__init__(pop_size, max_generation, FBGN, threshold)
@@ -739,7 +739,7 @@ class dynamic_multi_swarm_particle_swarm_optimization(GeneticAlgo):
 
     @stack
     def predict(self, x, verbose=False):
-        bounds = ((self.bounds, ) * vars.FBGN)
+        bounds = ((self.bounds, ) * vars.Q)
         subpopulations = [Individual_hist.create_population(
                                    self.pop_size,
                                    initialize=create_real_vector(bounds),
@@ -759,7 +759,7 @@ class dynamic_multi_swarm_particle_swarm_optimization(GeneticAlgo):
             Individual.evaluate_population(population)
 
         # Initialize random velocities in ]0,1]
-        self.velocities = np.random.rand(self.swarms, self.pop_size, vars.FBGN)
+        self.velocities = np.random.rand(self.swarms, self.pop_size, vars.Q)
         # Move to ]-diff(bounds),diff(bounds)]
         self.velocities = (self.velocities-0.5)*2*np.diff(self.bounds)
 
