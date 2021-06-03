@@ -23,14 +23,14 @@ class ELM(BaseEstimator, RegressorMixin):
         return H
 
     def predict(self, X):
-        X = check_array(X)
+        X = check_array(X, ensure_2d=False)
         H = self.hidden_nodes(X)
         out = np.dot(H, self.output_weights)
         return out
 
     def fit(self, X, y):
 
-        X, y = check_X_y(X, y, dtype='float')
+        X, y = check_X_y(X, y, multi_output=True, dtype='float')
 
         input_size = X.shape[1]
 
