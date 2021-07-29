@@ -107,7 +107,7 @@ class FBGDecoder(Decoder):
         super().__init__()
 
     def decode(self, genome, *args, **kwargs):
-        phenome = X(genome)
+        phenome = X(A_b=genome, λ=vars.λ, A=vars.A, Δλ=vars.Δλ)
         return phenome
 
     def __repr__(self):
@@ -120,8 +120,8 @@ class FBGDecoder_binary(Decoder):
         super().__init__()
 
     def decode(self, genome, *args, **kwargs):
-        I, A_b = partial_decode(genome)
-        phenome = X(A_b, I)
+        A, A_b = partial_decode(genome)
+        phenome = X(A_b=A_b, λ=vars.λ, A=A, Δλ=vars.Δλ)
         return phenome
 
     def __repr__(self):
@@ -221,6 +221,7 @@ def sort_genome(population: Iterator) -> Iterator:
     for ind in population:
         I_bin = next(partial_decode(ind.genome))  # decode I from genome
         indx = np.argsort(I_bin)  # index of sorted I
+        if vars.A[0]>vars.A[1]:
         indx = indx[::-1]  # larger first
 
         # split I from A_b chromosomes

@@ -9,9 +9,11 @@ figsize = (10, 5)
 n = 10**-9  # nano
 p = 10**-12  # pico
 
+topology='parallel'
+
 N = 300  # number of spectral sampling points
 M = 10000  # numbers of sampling points of test sweep
-test_ratio = 0.1
+test_M = 1000
 
 # FBG Characterization
 Q = 2  # Number of FBGs
@@ -30,8 +32,13 @@ n2 = 1.478  # cladding n
 
 # mode properties
 V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
-# TODO: Replace approximation by ofiber package function ?
-b = (1.1428-0.9960/V)**2  # normalized frequency LP01 approximation
+try: 
+    # normalized frequency LP01
+    from ofiber import LP_mode_value
+    b = LP_mode_value(V, 0, 1)
+except ImportError:
+    # normalized frequency LP01 approximation
+    b = (1.1428-0.9960/V)**2  
 n_eff = n2 + b*(n1-n2)  # effective refractive index
 M_p = 1-1/V**2  # Portion of power in core
 
