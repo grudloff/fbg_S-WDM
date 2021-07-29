@@ -222,7 +222,7 @@ def sort_genome(population: Iterator) -> Iterator:
         I_bin = next(partial_decode(ind.genome))  # decode I from genome
         indx = np.argsort(I_bin)  # index of sorted I
         if vars.A[0]>vars.A[1]:
-        indx = indx[::-1]  # larger first
+            indx = indx[::-1]  # larger first
 
         # split I from A_b chromosomes
         I_float, A_b_float = np.split(ind.genome, 2)
@@ -441,11 +441,12 @@ def get_genome_pop_best(population):
 
 class GeneticAlgo():
     def __init__(self, pop_size=20, max_generation=500, FBGN=vars.Q,
-                 threshold=1*vars.n):
+                 threshold=0.1, patience=200):
         self.pop_size = pop_size
         self.max_generation = max_generation
         self.FBGN = FBGN
         self.threshold = threshold
+        self.patience = patience
 
     @stack
     def predict(self, x, verbose=False):
@@ -499,7 +500,7 @@ class GeneticAlgo():
                 else:
                     static_counter = 0
 
-                if static_counter > 200:
+                if static_counter > self.patience:
                     if verbose:
                         util.print_population(parents,
                                               context['leap']['generation'])
@@ -516,10 +517,10 @@ class GeneticAlgo():
 
 class genetic_algorithm_binary(GeneticAlgo):
     def __init__(self, pop_size=20, max_generation=500, FBGN=vars.Q,
-                 threshold=1*vars.n, p_swap=1, p_mut=0.1):
+                 threshold=0.1, p_swap=1, p_mut=0.1, B=10):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.p_swap = p_swap
-        self.N = self.FBGN*2*10  # number of chromosomes
+        self.N = self.FBGN*2*B  # number of chromosomes
         self.ex_mut = p_mut*self.N
 
         def pipeline(parents):
@@ -560,9 +561,9 @@ class genetic_algorithm_binary(GeneticAlgo):
 
 class genetic_algorithm_real(GeneticAlgo):
     def __init__(self, pop_size=30, max_generation=100, FBGN=vars.Q,
-                 threshold=0.01, bounds=vars.bounds, p_swap=0.3,
+                 threshold=0.1, patience=200, bounds=vars.bounds, p_swap=0.3,
                  std=0.01*vars.n):
-        super().__init__(pop_size, max_generation, FBGN, threshold)
+        super().__init__(pop_size, max_generation, FBGN, threshold, patience)
         self.bounds = bounds
         self.p_swap = p_swap
         self.std = std
@@ -589,7 +590,7 @@ class genetic_algorithm_real(GeneticAlgo):
 
 class DistributedEstimation(GeneticAlgo):
     def __init__(self, pop_size=100, max_generation=500, FBGN=vars.Q,
-                 threshold=0.01, bounds=vars.bounds, m=2, top_size=10):
+                 threshold=0.1, bounds=vars.bounds, m=2, top_size=10):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
         self.m = m
@@ -604,7 +605,7 @@ class DistributedEstimation(GeneticAlgo):
                         ops.evaluate,
                         ops.pool(size=self.pop_size),
                         ops.truncation_selection(size=self.top_size,
-                                                 parents=parents)
+                                                 parents=None)
                         )
 
         self.pipeline = pipeline
@@ -619,12 +620,12 @@ class DistributedEstimation(GeneticAlgo):
                                    problem=FBGProblem(x)
                                    )
 
-        # Evaluate initial population/
+        # Evaluate initial population
         parents = Individual_numpy.evaluate_population(parents)
         parents = ops.truncation_selection(parents, size=self.top_size,
                                            parents=parents)
 
-        self.dist = GaussianMixture(warm_start=False,
+        self.dist = GaussianMixture(warm_start=True,
                                     n_components=self.m, reg_covar=1e-10)
 
         best_individual = self.loop(parents, verbose)
@@ -634,7 +635,7 @@ class DistributedEstimation(GeneticAlgo):
 
 class swap_differential_evolution(GeneticAlgo):
     def __init__(self, pop_size=30, max_generation=100, FBGN=vars.Q,
-                 threshold=0.01, bounds=vars.bounds, F=0.8, p_diff=0.9):
+                 threshold=0.1, bounds=vars.bounds, F=0.8, p_diff=0.9):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
         self.threshold = threshold
@@ -664,7 +665,7 @@ class swap_differential_evolution(GeneticAlgo):
 
 class particle_swarm_optimization(GeneticAlgo):
     def __init__(self, pop_size=50, max_generation=1000, FBGN=vars.Q,
-                 threshold=0.01, bounds=vars.bounds, w=0.6, pa=2, ga=2,
+                 threshold=0.1, bounds=vars.bounds, w=0.6, pa=2, ga=2,
                  lr=0.1):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
@@ -715,7 +716,7 @@ class particle_swarm_optimization(GeneticAlgo):
 
 class dynamic_multi_swarm_particle_swarm_optimization(GeneticAlgo):
     def __init__(self, pop_size=30, max_generation=1000, FBGN=vars.Q,
-                 threshold=0.01, bounds=vars.bounds, w=0.6, pa=2, ga=2, lr=0.1,
+                 threshold=0.1, bounds=vars.bounds, w=0.6, pa=2, ga=2, lr=0.1,
                  swarms=10, migration_gap=15):
         super().__init__(pop_size, max_generation, FBGN, threshold)
         self.bounds = bounds
