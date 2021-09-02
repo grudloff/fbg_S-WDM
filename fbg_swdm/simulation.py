@@ -62,12 +62,15 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
 
 
 # gen M datapoints on an N-sized spectrum
-def gen_data(train_dist="mesh", Δ=0.7*vars.Δ):
+def gen_data(train_dist="mesh", portion=0.7):
+
+    Δ = portion*vars.Δ
 
     if train_dist == "mesh":
         y_train = np.linspace(vars.λ0-Δ, vars.λ0+Δ,
-                              int(sqrt(vars.M)))  # 1d array
-        y_train = np.meshgrid(y_train, y_train)  # 2d mesh from that array
+                              int(vars.M**(1/vars.Q)))  # 1d array
+        aux = [y_train for _ in range(vars.Q)]
+        y_train = np.meshgrid(*aux)  # 2d mesh from that array
         y_train = np.reshape(y_train, (vars.Q, vars.M)).T
 
     elif train_dist == "uniform":
@@ -83,16 +86,15 @@ def gen_data(train_dist="mesh", Δ=0.7*vars.Δ):
     return X_train, y_train, X_test, y_test
 
 
-def plot_datapoint(X_train, y_train, X_test, y_test):
+def plot_datapoint(X_train, y_train, X_test, y_test, N_datapoint = 1):
     plt.figure(figsize=(20, 10))
     plt.title("Datapoint visualization")
-    plt.plot(vars.λ/vars.n, X_test[1, :], label="FBG1+FBG2")
-    N_datapoint = 1
-    plt.plot(vars.λ/vars.n, R(vars.λ[:, None], y_test[N_datapoint, None, 0], vars.A[None, 0],
-                    vars.Δλ[None, 0]), linestyle='dashed', label="FBG1")
-    plt.plot(vars.λ/vars.n, R(vars.λ[:, None], y_test[N_datapoint, None, 1], vars.A[None, 1],
-                    vars.Δλ[None, 1]), linestyle='dashed', label="FBG2")
-    plt.stem(y_test[1, :]/vars.n, np.full(2, 1), linefmt='r-.', markerfmt="None",
+    plt.plot(vars.λ/vars.n, X_test[1, :], label="$\sum FBGi$")
+    for i in range(vars.Q):
+        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], y_test[N_datapoint, None, 0],
+                 vars.A[None, 0], vars.Δλ[None, i]), linestyle='dashed',
+                 label="FBG"+str(i))
+    plt.stem(y_test[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
              basefmt="None", use_line_collection=True)
     plt.xlabel("Reflection spectrum")
     plt.xlabel("[nm]")
