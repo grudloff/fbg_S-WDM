@@ -358,8 +358,13 @@ class base_model(pl.LightningModule):
         if self.scheduler is None:
             return optimizer
         elif self.scheduler == 'one_cycle':
+            # default kwargs
+            scheduler_kwargs = dict(div_factor=1, final_div_factor=1e2,
+                        cycle_momentum=True,
+                        anneal_strategy='cos', three_phase=True)
+            scheduler_kwargs.update(self.scheduler_kwargs)
             scheduler = OneCycleLR(optimizer, max_lr=self.hparams.lr, 
-                                   **self.scheduler_kwargs)
+                                   **scheduler_kwargs)
             scheduler = {"scheduler": scheduler, "interval" : "step" }
         else:
             raise ValueError("scheduler should be one of {'one_cycle'}")
