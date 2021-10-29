@@ -5,6 +5,7 @@ from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
 from fbg_swdm.simulation import R, X
 
+import torch
 
 def mae(a, b):
     return np.mean(np.abs(a-b))
@@ -73,3 +74,30 @@ def plot_sweep(model, normalize=True, rec_error=False, **kwargs):
         plt.plot(y[:, n_sweep]/n, np.sum(np.abs(x - X_hat), axis=1))
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")
+
+def check_latent(model, K=10, **kwargs):
+
+    x, y = _gen_sweep(**kwargs)
+
+    y = (y - vars.λ0)/vars.Δ
+    input = torch.tensor(x, dtype=torch.get_default_dtype(), device=model.device)
+    y_hat, latent = model(input)
+    y_hat = y_hat.detach().numpy()
+
+    AE = np.abs(y-y_hat)
+    AE = np.sum(AE, axis=1)/vars.p
+    top_n = AE.argsort()[-K:][::-1]
+
+    for n in top_n:
+        test = x[n]
+        input = torch.tensor(test, dtype=torch.get_default_dtype(), device=model.device)
+        input = input.unsqueeze(0) # add batch dim
+        y_hat, latent = model(input)
+        y_hat = np.squeeze(y_hat.detach().numpy())
+        latent = latent.detach().numpy()
+        latent = latent.T
+        latent = np.squeeze(latent)
+        plt.figure()
+        plt.plot(test)
+        plt.plot(latent)
+        plt.title('y='+str(y[n])+' y_hat='+str(y_hat))
