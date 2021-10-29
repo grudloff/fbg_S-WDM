@@ -259,10 +259,9 @@ class decoder(nn.Module):
 # ---------------------------------------------------------------------------- #
 
 class base_model(pl.LightningModule):
-    def __init__(self, weights=None, reg = 1e-5,
-                 rho= 1e-1, batch_size=1000, lr = 3e-1,
-                 data=None, num_layers=3, num_head_layers=2,
-                 encoder_type = 'dense', reg_type='l1'):
+    def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
+                 data=None, optimizer='adam', scheduler='one_cycle', 
+                 scheduler_kwargs = {}, **kwargs):
         super().__init__()
         
         # Hyperparameters
@@ -372,12 +371,12 @@ class base_model(pl.LightningModule):
 
 
 class encoder_model(base_model):
-    def __init__(self, weights=None, reg = 1e-5,
-                 rho=1e-1, batch_size=1000, lr = 3e-1,
-                 data=None, num_layers=3, num_head_layers=2,
-                 encoder_type = 'dense', reg_type='l1'):
-        super().__init__(weights, reg, rho, batch_size, lr, data, num_layers,
-                         num_head_layers, encoder_type, reg_type)
+    def __init__(self, reg=1e-5,
+                 rho=1e-1, num_layers=3, num_head_layers=2,
+                 encoder_type = 'dense', reg_type='l1', **kwargs):
+        super().__init__(reg=reg, rho=rho, num_layers=num_layers,
+                         num_head_layers=num_head_layers, 
+                         encoder_type=encoder_type, reg_type=reg_type, **kwargs)
 
         if encoder_type == 'dense':
             self.encoder = dense_encoder(num_layers, num_head_layers)
