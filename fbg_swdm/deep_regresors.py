@@ -266,7 +266,9 @@ class base_model(pl.LightningModule):
         super().__init__()
         
         # Hyperparameters
-        self.save_hyperparameters(ignore=['weights', 'data'], logger=False)
+        self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
+                                          'scheduler', 'scheduler_kwargs'],
+                                  logger=False)
 
         if weights is None:
             weights = np.full(vars.Q, 1/vars.Q)
@@ -280,8 +282,10 @@ class base_model(pl.LightningModule):
         else:
             self.data = data
         
-        self.optimizer = None
-        self.scheduler = None
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+
+        self.scheduler_kwargs = scheduler_kwargs
 
         # get one batch from validation as an example 
         for batch in self.val_dataloader():
@@ -339,13 +343,21 @@ class base_model(pl.LightningModule):
         return DataLoader(test_ds, self.hparams.batch_size)
 
     def configure_optimizers(self):
-        if self.optimizer is None:
-            return SGD(self.parameters(), lr=self.hparams.lr)
-        elif self.scheduler is not None:
-            self.scheduler = {"scheduler": self.scheduler, "interval" : "step" }
-            return [self.optimizer], [self.scheduler]
+        if self.optimizer == 'adam':
+            optimizer = Adam(self.parameters(), lr=self.hparams.lr)
+        elif self.optimizer == 'sgd':
+            optimizer = SGD(self.parameters(), lr=self.hparams.lr)
         else:
-            return self.optimizer
+            raise ValueError("optimizer should be one of {'adam', 'sgd'}")
+        if self.scheduler is None:
+            return optimizer
+        elif self.scheduler == 'one_cycle':
+            scheduler = OneCycleLR(optimizer, max_lr=self.hparams.lr, 
+                                   **self.scheduler_kwargs)
+            scheduler = {"scheduler": scheduler, "interval" : "step" }
+        else:
+            raise ValueError("scheduler should be one of {'one_cycle'}")
+        return [optimizer], [scheduler]
 
     def predict(self, x):
         x = torch.tensor(x, dtype=torch.get_default_dtype(), device=self.device)
