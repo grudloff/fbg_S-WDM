@@ -19,25 +19,37 @@ def plot_dist(y, y_label=None, mean=False):
         print("mean("+y_label+") =", np.mean(y))
 
 
-# Plot sweep of one FBG with the other static
-def plot_sweep(model, d=0.6*n, normalize=True, rec_error=False, N=300):
-    
+def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
     y = np.zeros([N, vars.Q])
     # Static
     y[:, 0] = vars.λ0
     # Sweep
     y[:, 1] = np.linspace(vars.λ0-d, vars.λ0+d, N)
 
+    if invert:
+        y = y[:,::-1]
+
     # broadcast shape: N, M, FBGN
-    X_sweep = X(y, vars.λ, vars.A, vars.Δλ)
+    x = X(y, vars.λ, vars.A, vars.Δλ)
+    if noise:
+        x += np.random.randn(*x.shape)*1e-3*noise
+    return x, y 
+
+
+# Plot sweep of one FBG with the other static
+def plot_sweep(model, normalize=True, rec_error=False, **kwargs):
+    
+    n_sweep = int(not kwargs['invert']) # select y row that sweeps
+
+    x, y = _gen_sweep(**kwargs)
 
     if normalize:
-        X_sweep = X_sweep/np.sum(vars.A)  # scale input
-        y_hat = vars.λ0+vars.Δ*model.predict(X_sweep)
-        X_sweep = X_sweep*np.sum(vars.A)
+        x = x/np.sum(vars.A)  # scale input
+        y_hat = vars.λ0+vars.Δ*model.predict(x)
+        x = x*np.sum(vars.A)
 
     else:
-        y_hat = model.predict(X_sweep)
+        y_hat = model.predict(x)
 
     error = np.abs(y - y_hat)
 
@@ -46,18 +58,18 @@ def plot_sweep(model, d=0.6*n, normalize=True, rec_error=False, N=300):
     fig = plt.figure(figsize=figsize)
 
     a1 = plt.gca()
-    a1.plot(y[:, 1]/n, y_hat/n, linewidth=2)
+    a1.plot(y[:, n_sweep]/n, y_hat/n, linewidth=2)
     a1.set_xlabel("$\lambda_{B_2}$ [nm]")
     a1.set_ylabel('$\lambda_{B_i}$ [nm]')
 
     a2 = a1.twinx()
-    a2.plot(y[:, 1]/n, np.sum(error, axis=1)/p, "--r")
+    a2.plot(y[:, n_sweep]/n, np.sum(error, axis=1)/p, "--r")
     a2.set_ylabel('Absolute Error [pm]')
     fig.legend(labels=("FBG1", "FBG2", "Absolute Error"))
 
     if rec_error:
         plt.figure(figsize=figsize)
         X_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
-        plt.plot(y[:, 1]/n, np.sum(np.abs(X_sweep - X_hat), axis=1))
+        plt.plot(y[:, n_sweep]/n, np.sum(np.abs(x - X_hat), axis=1))
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")
