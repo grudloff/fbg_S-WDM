@@ -2,7 +2,8 @@
 from torch import nn, cat, linspace, tensor
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
-from torch.optim import SGD
+from torch.optim import Adam, SGD
+from torch.optim.lr_scheduler import OneCycleLR
 import torch
 from torch import Tensor
 import pytorch_lightning as pl
