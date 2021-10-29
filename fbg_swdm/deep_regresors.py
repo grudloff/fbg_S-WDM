@@ -297,8 +297,13 @@ class base_model(pl.LightningModule):
         outputs, _ = outputs
         return F.l1_loss(outputs, targets)
 
+    def l2(self, outputs, targets):
+        _, latents = outputs
+        return torch.norm(latents, p=2, dim=-1).mean()
+
     def on_train_start(self):
-        self.logger.log_hyperparams(self.hparams)
+        self.logger.log_hyperparams(self.hparams, 
+                                    {'hp/val_MAE': -1, 'hp/l2': -1})
 
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
@@ -316,7 +321,8 @@ class base_model(pl.LightningModule):
         self.log('val_loss', loss, prog_bar=True)
         metric = self.metric(outputs, y)
         self.log('val_MAE', metric, prog_bar=True)
-        self.log('hp_metric', metric)
+        self.log('hp/val_MAE', metric)
+        self.log('hp/l2', self.l2(outputs, y))
 
     def get_progress_bar_dict(self):
         items = super().get_progress_bar_dict()
