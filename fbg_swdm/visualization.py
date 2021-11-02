@@ -75,13 +75,17 @@ def plot_sweep(model, normalize=True, rec_error=False, **kwargs):
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")
 
-def check_latent(model, K=10, **kwargs):
+def check_latent(model, K=10,  **kwargs):
 
     x, y = _gen_sweep(**kwargs)
 
     y = (y - vars.λ0)/vars.Δ
     input = torch.tensor(x, dtype=torch.get_default_dtype(), device=model.device)
+    
+    x = x/np.sum(vars.A)  # scale input
     y_hat, latent = model(input)
+    y_hat = vars.λ0+vars.Δ*y_hat
+    x = x*np.sum(vars.A)
     y_hat = y_hat.detach().numpy()
 
     AE = np.abs(y-y_hat)
