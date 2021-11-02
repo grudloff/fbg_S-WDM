@@ -2,7 +2,7 @@
 from torch import nn, cat, linspace, tensor
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
-from torch.optim import Adam, SGD
+from torch.optim import Adam, SGD, AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 import torch
 from torch import Tensor
@@ -261,13 +261,15 @@ class decoder(nn.Module):
 
 class base_model(pl.LightningModule):
     def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
-                 data=None, optimizer='adam', scheduler='one_cycle', 
-                 scheduler_kwargs = {}, **kwargs):
+                 data=None, optimizer='adam', optimizer_kwargs={},
+                 weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
+                 **kwargs):
         super().__init__()
         
         # Hyperparameters
         self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
-                                          'scheduler', 'scheduler_kwargs'],
+                                          'optimizer_kwargs','scheduler',
+                                          'scheduler_kwargs'],
                                   logger=False)
 
         if weights is None:
@@ -285,6 +287,7 @@ class base_model(pl.LightningModule):
         self.optimizer = optimizer
         self.scheduler = scheduler
 
+        self.optimizer_kwargs = optimizer_kwargs
         self.scheduler_kwargs = scheduler_kwargs
 
         # get one batch from validation as an example 
@@ -350,11 +353,19 @@ class base_model(pl.LightningModule):
 
     def configure_optimizers(self):
         if self.optimizer == 'adam':
-            optimizer = Adam(self.parameters(), lr=self.hparams.lr)
+            optimizer = Adam(self.parameters(), lr=self.hparams.lr,
+                             weight_decay=self.hparams.weight_decay,
+                             **self.optimizer_kwargs)
         elif self.optimizer == 'sgd':
-            optimizer = SGD(self.parameters(), lr=self.hparams.lr)
+            optimizer = SGD(self.parameters(), lr=self.hparams.lr,
+                            weight_decay=self.hparams.weight_decay, 
+                            **self.optimizer_kwargs)
+        elif self.optimizer == 'adamw':
+            optimizer = AdamW(self.parameters(), lr=self.hparams.lr, 
+                              weight_decay=self.hparams.weight_decay,
+                              **self.optimizer_kwargs)
         else:
-            raise ValueError("optimizer should be one of {'adam', 'sgd'}")
+            raise ValueError("optimizer should be one of {'adam', 'sgd','adamw'}")
         if self.scheduler is None:
             return optimizer
         elif self.scheduler == 'one_cycle':
