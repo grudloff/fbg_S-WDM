@@ -369,8 +369,13 @@ class base_model(pl.LightningModule):
             optimizer = AdamW(self.parameters(), lr=self.hparams.lr, 
                               weight_decay=self.hparams.weight_decay,
                               **self.optimizer_kwargs)
+        elif issubclass(self.optimizer, torch.optim.Optimizer):
+            optimizer = self.optimizer(self.parameters(), lr=self.hparams.lr, 
+                              weight_decay=self.hparams.weight_decay,
+                              **self.optimizer_kwargs)
         else:
-            raise ValueError("optimizer should be one of {'adam', 'sgd','adamw'}")
+            raise ValueError("optimizer should be one of {'adam', 'sgd','adamw'} \
+                             or a subclass of Optimizer")
         if self.scheduler is None:
             return optimizer
         elif self.scheduler == 'one_cycle':
