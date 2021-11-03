@@ -86,7 +86,7 @@ def check_latent(model, K=10,  **kwargs):
     y_hat, latent = model(input)
     y_hat = vars.λ0+vars.Δ*y_hat
     x = x*np.sum(vars.A)
-    y_hat = y_hat.detach().numpy()
+    y_hat = y_hat.detach().cpu().numpy()
 
     AE = np.abs(y-y_hat)
     AE = np.sum(AE, axis=1)/vars.p
