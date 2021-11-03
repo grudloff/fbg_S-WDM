@@ -263,13 +263,13 @@ class base_model(pl.LightningModule):
     def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
-                 **kwargs):
+                 noise=False, **kwargs):
         super().__init__()
         
         # Hyperparameters
         self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
                                           'optimizer_kwargs','scheduler',
-                                          'scheduler_kwargs'],
+                                          'scheduler_kwargs', 'noise'],
                                   logger=False)
 
         if weights is None:
@@ -289,6 +289,8 @@ class base_model(pl.LightningModule):
 
         self.optimizer_kwargs = optimizer_kwargs
         self.scheduler_kwargs = scheduler_kwargs
+
+        self.noise = noise
 
         # get one batch from validation as an example 
         for batch in self.val_dataloader():
@@ -310,6 +312,9 @@ class base_model(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
+        if self.noise:
+            sigma = np.random.uniform(0, 0.1)
+            x += torch.randn_like(x)*sigma
         outputs = self.forward(x)
         loss = self.loss(outputs, y)
         self.log('train_loss', loss, prog_bar=True)
