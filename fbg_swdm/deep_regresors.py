@@ -387,6 +387,14 @@ class base_model(pl.LightningModule):
             scheduler = OneCycleLR(optimizer, max_lr=self.hparams.lr, 
                                    **scheduler_kwargs)
             scheduler = {"scheduler": scheduler, "interval" : "step" }
+        elif issubclass(self.scheduler, torch.optim.lr_scheduler._LRScheduler):
+            scheduler = self.scheduler(optimizer, **self.scheduler_kwargs)
+            scheduler = {"scheduler": scheduler, "interval" : "step" }
+        elif isinstance(self.scheduler, dict):
+            scheduler = self.scheduler.copy()
+            scheduler['scheduler'] = scheduler['scheduler'](optimizer, 
+                                                            **self.scheduler_kwargs)
+
         else:
             raise ValueError("scheduler should be one of {'one_cycle'}")
         return [optimizer], [scheduler]
