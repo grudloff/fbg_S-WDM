@@ -394,6 +394,14 @@ class base_model(pl.LightningModule):
             scheduler = self.scheduler.copy()
             scheduler['scheduler'] = scheduler['scheduler'](optimizer, 
                                                             **self.scheduler_kwargs)
+        elif isinstance(self.scheduler, list):
+            scheduler_list = []
+            for scheduler in self.scheduler:
+                scheduler = scheduler.copy()
+                scheduler['scheduler'] = scheduler['scheduler'](optimizer, 
+                                                                **self.scheduler_kwargs)
+                scheduler_list.append(scheduler)
+            return [optimizer], scheduler_list                                                
 
         else:
             raise ValueError("scheduler should be one of {'one_cycle'}")
