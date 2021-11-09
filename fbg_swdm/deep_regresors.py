@@ -408,10 +408,14 @@ class base_model(pl.LightningModule):
             scheduler_list = [scheduler]
 
         if self.reduce_on_plateau:
-            scheduler = ReduceLROnPlateau(optimizer, patience=1000, mode='min')
+            if self.reduce_on_plateau is True:
+                patience = 1000
+            else:
+                patience = self.reduce_on_plateau
+            scheduler = ReduceLROnPlateau(optimizer, patience=patience, mode='min')
             scheduler = dict(scheduler=scheduler, monitor='val_MAE',
                              #reduce_on_plateau=True,
-                             step='epoch')
+                             interval = "step")
             scheduler_list.append(scheduler)
         
         if scheduler_list:
