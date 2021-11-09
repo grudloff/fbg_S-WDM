@@ -415,6 +415,7 @@ class base_model(pl.LightningModule):
             scheduler = ReduceLROnPlateau(optimizer, patience=patience, mode='min')
             scheduler = dict(scheduler=scheduler, monitor='val_MAE',
                              #reduce_on_plateau=True,
+                             strict =  False,
                              interval = "step")
             scheduler_list.append(scheduler)
         
