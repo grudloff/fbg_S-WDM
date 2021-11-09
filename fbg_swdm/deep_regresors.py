@@ -412,7 +412,8 @@ class base_model(pl.LightningModule):
                 patience = 1000
             else:
                 patience = self.reduce_on_plateau
-            scheduler = ReduceLROnPlateau(optimizer, patience=patience, mode='min')
+            scheduler = ReduceLROnPlateau(optimizer, patience=patience, mode='min',
+                                          factor=0.6)
             scheduler = dict(scheduler=scheduler, monitor='val_MAE',
                              #reduce_on_plateau=True,
                              strict =  False,
