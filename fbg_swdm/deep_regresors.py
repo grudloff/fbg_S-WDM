@@ -3,7 +3,7 @@ from torch import nn, cat, linspace, tensor
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.optim import Adam, SGD, AdamW
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import OneCycleLR, ReduceLROnPlateau
 import torch
 from torch import Tensor
 import pytorch_lightning as pl
@@ -263,7 +263,7 @@ class base_model(pl.LightningModule):
     def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
-                 noise=False, **kwargs):
+                 reduce_on_plateau=False, noise=False, **kwargs):
         super().__init__()
         
         # Hyperparameters
@@ -289,6 +289,8 @@ class base_model(pl.LightningModule):
 
         self.optimizer_kwargs = optimizer_kwargs
         self.scheduler_kwargs = scheduler_kwargs
+
+        self.reduce_on_plateau= reduce_on_plateau
 
         self.noise = noise
 
@@ -376,8 +378,10 @@ class base_model(pl.LightningModule):
         else:
             raise ValueError("optimizer should be one of {'adam', 'sgd','adamw'} \
                              or a subclass of Optimizer")
+
         if self.scheduler is None:
-            return optimizer
+            scheduler = None
+            #return optimizer
         elif self.scheduler == 'one_cycle':
             # default kwargs
             scheduler_kwargs = dict(div_factor=1, final_div_factor=1e2,
@@ -394,18 +398,26 @@ class base_model(pl.LightningModule):
             scheduler = self.scheduler.copy()
             scheduler['scheduler'] = scheduler['scheduler'](optimizer, 
                                                             **self.scheduler_kwargs)
-        elif isinstance(self.scheduler, list):
-            scheduler_list = []
-            for scheduler in self.scheduler:
-                scheduler = scheduler.copy()
-                scheduler['scheduler'] = scheduler['scheduler'](optimizer, 
-                                                                **self.scheduler_kwargs)
-                scheduler_list.append(scheduler)
-            return [optimizer], scheduler_list                                                
-
         else:
-            raise ValueError("scheduler should be one of {'one_cycle'}")
-        return [optimizer], [scheduler]
+            raise ValueError("scheduler should be one of {'one_cycle'} or \
+                             a subclass of _LRScheduler")
+
+        if scheduler is None:
+            scheduler_list = []
+        else:
+            scheduler_list = [scheduler]
+
+        if self.reduce_on_plateau:
+            scheduler = ReduceLROnPlateau(optimizer, patience=1000, mode='min')
+            scheduler = dict(scheduler=scheduler, monitor='val_MAE',
+                             #reduce_on_plateau=True,
+                             step='epoch')
+            scheduler_list.append(scheduler)
+        
+        if scheduler_list:
+            return [optimizer], scheduler_list
+        else:
+            return optimizer
 
     def predict(self, x):
         x = torch.tensor(x, dtype=torch.get_default_dtype(), device=self.device)
