@@ -8,6 +8,7 @@ import torch
 from torch import Tensor
 import pytorch_lightning as pl
 import numpy as np
+from random import uniform
 
 import fbg_swdm.simulation as sim
 import fbg_swdm.variables as vars
@@ -315,8 +316,12 @@ class base_model(pl.LightningModule):
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
         if self.noise:
-            sigma = np.random.uniform(0, 0.1)
-            x += torch.randn_like(x)*sigma
+            #sigma = uniform(0, 0.1)
+            max_sigma = 1e-2
+            sigma = max_sigma*torch.rand((x.size(0), 1), dtype=x.dtype,
+                                         layout=x.layout, device=x.device)
+            noise = sigma*torch.randn_like(x)
+            x += noise
         outputs = self.forward(x)
         loss = self.loss(outputs, y)
         self.log('train_loss', loss, prog_bar=True)
