@@ -169,13 +169,16 @@ class residual_encoder(nn.Module):
     def __init__(self, num_layers, num_head_layers):
         super().__init__()
 
+        self.num_layers = num_layers
+        self.num_head_layers = num_head_layers
+
         #Conv layers with concat connections
         self.conv = nn.ModuleDict()
         in_channels = 1
-        for i in range(self.hparams.num_layers):
-            out_channels = 2**(6-i//int(np.sqrt(num_layers)))
+        for i in range(self.num_layers):
+            out_channels = 2**(6-i//int(np.sqrt(self.num_layers)))
             # first conv layer
-            kernel_size = 2**(4 - (i-1)//2**(4+num_layers//2)) + 1
+            kernel_size = 2**(4 - (i-1)//2**(4+self.num_layers//2)) + 1
             conv = conv_mish(in_channels, out_channels, kernel_size)
             self.conv['layer{}_conv1'.format(i)] = conv
             # second conv layer
@@ -189,9 +192,9 @@ class residual_encoder(nn.Module):
 
         #head of size-1 convolutions
         self.head = nn.ModuleDict()
-        for i in range(self.hparams.num_head_layers):
-            out_channels = 2**(3+self.hparams.num_head_layers//2 \
-                               - i//int(np.sqrt(self.hparams.num_head_layers)))
+        for i in range(self.num_head_layers):
+            out_channels = 2**(3+self.num_head_layers//2 \
+                               - i//int(np.sqrt(self.num_head_layers)))
             conv = conv_mish(in_channels, out_channels)
             self.head.update({'layer{}_conv'.format(i):conv})
             in_channels = out_channels
@@ -212,7 +215,7 @@ class residual_encoder(nn.Module):
         x = x.unsqueeze(1)
 
         #conv layers
-        for i in range(self.hparams.num_layers):
+        for i in range(self.num_layers):
             residual = x
             x = F.mish(self.conv['layer{}_conv1'.format(i)](x))
             x = F.mish(self.conv['layer{}_conv2'.format(i)](x))
@@ -220,7 +223,7 @@ class residual_encoder(nn.Module):
             
 
         #head conv layers
-        for i in range(self.hparams.num_head_layers):
+        for i in range(self.num_head_layers):
             x = F.mish(self.head['layer{}_conv'.format(i)](x))
  
         latent = F.softmax(self.out_conv(x), -1)    
