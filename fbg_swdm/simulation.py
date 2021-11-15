@@ -55,9 +55,12 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
 
     elif vars.topology == 'serial':
         x = 0
+        t = 1
         for i, j, k in zip(A_b.T, A.T, Δλ.T):
             x_next = R(i.T, np.squeeze(λ), j.T, k.T)
-            x = x + (1-x)**2*x_next/(1-x_next*x)
+            S = 1/(1-x_next*x)
+            x = x + (1-x)**2*x_next*S
+            t = t*(1-x_next)*S
     return x
 
 
@@ -89,10 +92,10 @@ def gen_data(train_dist="mesh", portion=0.7):
 def plot_datapoint(X_train, y_train, X_test, y_test, N_datapoint = 1):
     plt.figure(figsize=(20, 10))
     plt.title("Datapoint visualization")
-    plt.plot(vars.λ/vars.n, X_test[1, :], label="$\sum FBGi$")
+    plt.plot(vars.λ/vars.n, X_test[N_datapoint, :], label="$\sum FBGi$")
     for i in range(vars.Q):
-        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], y_test[N_datapoint, None, 0],
-                 vars.A[None, 0], vars.Δλ[None, i]), linestyle='dashed',
+        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], y_test[N_datapoint, None, i],
+                 vars.A[None, i], vars.Δλ[None, i]), linestyle='dashed',
                  label="FBG"+str(i))
     plt.stem(y_test[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
              basefmt="None", use_line_collection=True)
