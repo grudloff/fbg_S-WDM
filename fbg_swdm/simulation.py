@@ -89,15 +89,15 @@ def gen_data(train_dist="mesh", portion=0.7):
     return X_train, y_train, X_test, y_test
 
 
-def plot_datapoint(X_train, y_train, X_test, y_test, N_datapoint = 1):
+def plot_datapoint(X, Y, N_datapoint = 1):
     plt.figure(figsize=(20, 10))
     plt.title("Datapoint visualization")
-    plt.plot(vars.λ/vars.n, X_test[N_datapoint, :], label="$\sum FBGi$")
+    plt.plot(vars.λ/vars.n, X[N_datapoint, :], label="$\sum FBGi$")
     for i in range(vars.Q):
-        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], y_test[N_datapoint, None, i],
+        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], Y[N_datapoint, None, i],
                  vars.A[None, i], vars.Δλ[None, i]), linestyle='dashed',
                  label="FBG"+str(i))
-    plt.stem(y_test[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
+    plt.stem(Y[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
              basefmt="None", use_line_collection=True)
     plt.xlabel("Reflection spectrum")
     plt.xlabel("[nm]")
