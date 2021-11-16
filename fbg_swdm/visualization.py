@@ -45,9 +45,15 @@ def plot_sweep(model, normalize=True, rec_error=False, **kwargs):
     x, y = _gen_sweep(**kwargs)
 
     if normalize:
-        x = x/np.sum(vars.A)  # scale input
+        if vars.topology == 'parallel':
+            x = x/np.sum(vars.A)
+        if vars.topology == 'serial':
+            x = x/np.max(vars.A)
         y_hat = vars.λ0+vars.Δ*model.predict(x)
-        x = x*np.sum(vars.A)
+        if vars.topology == 'parallel':
+            x = x*np.sum(vars.A)
+        if vars.topology == 'serial':
+            x = x*np.max(vars.A)
 
     else:
         y_hat = model.predict(x)
