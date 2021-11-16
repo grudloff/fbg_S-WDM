@@ -70,7 +70,7 @@ def kl_div(hparams):
 def spread(input: Tensor) -> Tensor:
     #
     # input: B, C, W tensor
-    x = torch.arange(float(vars.N), device = input.device)
+    x = torch.arange(input.size(-1), device = input.device)
     mean = torch.sum(x*input, dim=-1, keepdim=True)
     dist_mean = torch.abs(x - mean) # distance to mean
     dist_mean = dist_mean.detach() #don't propagate gradient through here
