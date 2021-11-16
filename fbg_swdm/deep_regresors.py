@@ -111,7 +111,7 @@ class dense_encoder(nn.Module):
         in_channels = 1
         for i in range(self.num_layers):
             out_channels = 2**(6-i//int(np.sqrt(self.num_layers)))
-            kernel_size = 2**(4 - (i-1)//int(np.sqrt(self.num_layers))) + 1
+            kernel_size = (vars.N//300)*2**(4 - (i-1)//int(np.sqrt(self.num_layers))) + 1
             # first conv layer
             conv = conv_mish(in_channels, out_channels, kernel_size)
             self.body['layer{}_conv1'.format(i)] = conv
