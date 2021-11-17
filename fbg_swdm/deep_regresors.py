@@ -278,8 +278,8 @@ class base_model(pl.LightningModule):
 
         if weights is None:
             weights = np.full(vars.Q, 1/vars.Q)
-            weights = weights/np.sum(weights)
-            weights = torch.tensor(weights.copy(), dtype=torch.get_default_dtype())
+        weights = weights/np.sum(weights)
+        weights = torch.tensor(weights.copy(), dtype=torch.get_default_dtype())
         self.register_buffer("weights", weights)
 
         if data is None:
