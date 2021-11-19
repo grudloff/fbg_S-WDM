@@ -83,9 +83,10 @@ def l1_norm(input: Tensor) -> Tensor:
 
 # -------------------------------- Model Utils ------------------------------- #
 
-def conv_mish(in_channels, out_channels, kernel_size=1):
+def conv_mish(in_channels, out_channels, kernel_size=1, dilation=1):
     # create & initialize conv layer for mish activation
-    conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding='same')
+    conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding='same',
+                     dilation=dilation)
     nn.init.kaiming_uniform_(conv.weight, a=0.0003)
     nn.init.zeros_(conv.bias)
     return conv
@@ -94,6 +95,70 @@ def resample(in_channels, out_channels):
     conv = nn.Conv1d(in_channels, out_channels, 1, padding='same', bias=False)
     nn.init.kaiming_uniform_(conv.weight, a=0.0003)
     return conv
+
+def test_kernel(vect):
+    receptive_field = 1
+    #dilation = 1
+    for kernel in vect:
+        receptive_field = (kernel-1)*receptive_field+1
+        #dilation = dilation*(kernel-1)
+    return receptive_field
+
+def get_kernel_sizes(n_layers, target, verbose=False):
+    # if target is in nm
+    if isinstance(target, float):
+        target = int(target*vars.N/(vars.Δ*2)*vars.n)
+
+    # init all kernels in 3 for each layer
+    kernel_vect = [3]*n_layers
+
+    #increase first kernel until receptive_field is surpassed
+    while True:
+        receptive_field = test_kernel(kernel_vect)
+        
+        if receptive_field > target:
+            break
+        else:
+            kernel_vect[0] = (kernel_vect[0]+1)*2 -1
+    if verbose:
+        print('kernel_vect: ', kernel_vect)
+        print('receptive_field: ', receptive_field)
+    
+    # if receptive_field surpasses target without increasing kernel
+    if kernel_vect[0]==3:
+        if verbose:
+            print('Too many layers')
+        return kernel_vect
+
+    # Decrease first kernel by roughly 2e-1 times and compensate by
+    # incresing by two the following kernels to get a receptive_field
+    # closer to the target
+    best_kernel_vect = kernel_vect.copy()
+    best_receptive_field = receptive_field
+    
+    change_idx = 1
+    stop = n_layers
+    while True:
+        kernel_vect[0] = (kernel_vect[0]+1)//2 -1
+        kernel_vect[change_idx] += 2
+        receptive_field = test_kernel(kernel_vect)
+        if verbose:
+            print('kernel_vect: ', kernel_vect)
+            print('receptive_field: ', receptive_field)
+        if kernel_vect[0]<7 or kernel_vect[0]<kernel_vect[1]:
+            break
+        if abs(receptive_field-target)<abs(best_receptive_field-target):
+            best_kernel_vect = kernel_vect.copy()
+            best_receptive_field = receptive_field
+            
+        change_idx += 1
+        if change_idx == stop:
+            change_idx = 1
+    
+    if verbose:
+        print('kernel_vect: ', best_kernel_vect)
+        print('receptive_field: ', best_receptive_field)
+    return best_kernel_vect
 
 # ---------------------------------------------------------------------------- #
 #                                 Torch Models                                 #
@@ -227,6 +292,70 @@ class residual_encoder(nn.Module):
             x = F.mish(self.head['layer{}_conv'.format(i)](x))
  
         latent = F.softmax(self.out_conv(x), -1)    
+
+        #output linear transform
+        y = torch.matmul(latent, self.output_linear)
+
+        return y, latent
+
+
+class dilated_encoder(nn.Module):
+    def __init__(self, num_layers, num_head_layers, receptive_field=1.0, init_channels_exp=3, channels_growdth = None):
+        super().__init__()
+
+        self.num_layers = num_layers
+        self.num_head_layers = num_head_layers
+
+        if channels_growdth == None:
+            channels_growdth = 1/int(np.sqrt(self.num_layers))
+        kernel_vect = get_kernel_sizes(num_layers, receptive_field)
+
+        #Conv layers with concat connections
+        self.conv = nn.ModuleDict()
+        in_channels = 1
+        dilation = 1
+        for i in range(self.num_layers):
+            kernel = kernel_vect[i]
+            out_channels = 2**(init_channels_exp+int(i*channels_growdth))
+            # first conv layer
+            dilation = dilation*(kernel-1)
+            conv = conv_mish(in_channels, out_channels, kernel, dilation)
+            self.conv['layer{}_conv'.format(i)] = conv
+            in_channels = out_channels
+
+        #head of size-1 convolutions
+        self.head = nn.ModuleDict()
+        for i in range(self.num_head_layers):
+            out_channels = 2**(3+self.num_head_layers//2 \
+                               - i//int(np.sqrt(self.num_head_layers)))
+            conv = conv_mish(in_channels, out_channels)
+            self.head.update({'layer{}_conv'.format(i):conv})
+            in_channels = out_channels
+
+        #output size-1 convolution
+        out_channels = vars.Q
+        self.out_conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, 
+                                  padding='same')
+        nn.init.kaiming_uniform_(self.out_conv.weight, nonlinearity='sigmoid')
+        nn.init.zeros_(conv.bias)
+        
+        #output linear transform params
+        weights = linspace(-1, 1, vars.N)
+        self.output_linear = nn.Parameter(weights, requires_grad=False)
+
+    def forward(self, x):
+        #add channel dimension
+        x = x.unsqueeze(1)
+
+        #conv layers
+        for i in range(self.num_layers):
+            x = F.mish(self.conv['layer{}_conv'.format(i)](x))           
+
+        #head conv layers
+        for i in range(self.num_head_layers):
+            x = F.mish(self.head['layer{}_conv'.format(i)](x))
+ 
+        latent = F.softmax(self.out_conv(x), -1)     
 
         #output linear transform
         y = torch.matmul(latent, self.output_linear)
