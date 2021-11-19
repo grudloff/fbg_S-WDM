@@ -65,7 +65,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
 
 
 # gen M datapoints on an N-sized spectrum
-def gen_data(train_dist="mesh", portion=0.7):
+def gen_data(train_dist="mesh", portion=0.6):
 
     Δ = portion*vars.Δ
 
