@@ -396,13 +396,16 @@ class base_model(pl.LightningModule):
     def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
-                 reduce_on_plateau=False, noise=False, **kwargs):
+                 reduce_on_plateau=False, noise=False,
+                 encoder_kwargs={}, **kwargs):
         super().__init__()
         
         # Hyperparameters
         self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
                                           'optimizer_kwargs','scheduler',
-                                          'scheduler_kwargs', 'noise'],
+                                          'scheduler_kwargs',
+                                          'reduce_on_plateau', 'noise',
+                                          'encoder_kwargs'],
                                   logger=False)
 
         if weights is None:
@@ -435,7 +438,7 @@ class base_model(pl.LightningModule):
 
     def metric(self, outputs, targets):
         outputs, _ = outputs
-        return F.l1_loss(outputs, targets)
+        return F.l1_loss(outputs, targets)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
         _, latents = outputs
@@ -571,10 +574,13 @@ class base_model(pl.LightningModule):
 class encoder_model(base_model):
     def __init__(self, reg=1e-5,
                  rho=1e-1, num_layers=3, num_head_layers=2,
-                 encoder_type = 'dense', reg_type='l1', **kwargs):
+                 encoder_type = 'dense', encoder_kwargs={}, reg_type='l1',
+                 **kwargs):
         super().__init__(reg=reg, rho=rho, num_layers=num_layers,
                          num_head_layers=num_head_layers, 
-                         encoder_type=encoder_type, reg_type=reg_type, **kwargs)
+                         encoder_type=encoder_type,
+                         encoder_kwargs=encoder_kwargs,reg_type=reg_type,
+                         **kwargs)
 
         if encoder_type == 'dense':
             self.encoder = dense_encoder(num_layers, num_head_layers)
@@ -584,6 +590,18 @@ class encoder_model(base_model):
             self.encoder = encoder_type(num_layers, num_head_layers)
         else:
             raise ValueError("encoder_type must be {'dense','residual'} or a subclass of nn.Module")
+
+        if encoder_type == 'dense':
+            encoder = dense_encoder
+        elif encoder_type == 'residual':
+            encoder = residual_encoder
+        elif encoder_type == 'dilated':
+            encoder = dilated_encoder
+        elif issubclass(encoder_type, nn.Module):
+            encoder = encoder_type
+        else:
+            raise ValueError("encoder_type must be {'dense','residual', 'dilated'} or a subclass of nn.Module")
+        self.encoder = encoder(num_layers, num_head_layers, **encoder_kwargs)
 
         if reg_type == 'l1':
             self.reg_func = l1_norm
