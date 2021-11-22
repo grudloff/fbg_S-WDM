@@ -60,7 +60,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
     elif vars.topology == 'serial':
         T = 1
         for i, j, k in zip(A_b.T, A.T, Δλ.T):
-            s, s_2, L, κ, κ0, Δβ = partial_R(i.T, λ, j.T, k.T)
+            s, s_2, L, κ, κ0, Δβ = partial_R(i.T, np.squeeze(λ), j.T, k.T)
             sL = s*L
             cosh_sL = np.cosh(sL)
             sinh_sL = np.sinh(sL)
