@@ -68,7 +68,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
                             -κ/s*sinh_sL])
             new_T = np.stack([new_T, np.conjugate(new_T[::-1])])
             T = T*j*new_T
-        R = T[0,1]/T[0,0]
+        x = T[0,1]/T[0,0]
 
     elif vars.topology == 'serial_old':
         x = 0
