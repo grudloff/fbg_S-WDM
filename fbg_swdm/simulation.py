@@ -68,8 +68,9 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
                             -κ/s*sinh_sL])
             new_T = np.stack([new_T, np.conjugate(new_T[::-1])])
             #TODO check this is ok
-            new_T[:, 1] /= np.tanh(κ0*L) # normalization
-            new_T[:, 1] *= j # atenuation
+            tanh_κ0L = np.tanh(κ0*L)
+            new_T *= np.diag([1/tanh_κ0L, tanh_κ0L]) # normalization
+            new_T[:, 1] *= np.diag([1/sqrt(j),sqrt(j)]) # atenuation
             T = T*new_T
         x = T[0,1]/T[0,0]
         x = np.abs(x)**2
