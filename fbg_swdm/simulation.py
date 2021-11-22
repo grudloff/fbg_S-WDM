@@ -67,8 +67,10 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
             new_T = np.stack([cosh_sL - 1j*Δβ/s*sinh_sL,
                             -κ/s*sinh_sL])
             new_T = np.stack([new_T, np.conjugate(new_T[::-1])])
+            new_T = new_T/np.tanh(κ0*L)**2 # normalization
             T = T*j*new_T
         x = T[0,1]/T[0,0]
+        x = np.abs(x)**2
 
     elif vars.topology == 'serial_old':
         x = 0
