@@ -11,9 +11,7 @@ from math import sqrt
 def gaussian_R(λb, λ, A=1, Δλ=0.4*vars.n):
     return A*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
 
-
-def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
-
+def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
     # Δn in relation to Δλ assuming L=S/κ
     Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.M_p/vars.λ0/vars.S))
 
@@ -24,6 +22,12 @@ def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
     Δβ = 2*vars.π*vars.n_eff*(1/λ - 1/λb)  # Δβ = β - π/Λ
     s_2 = κ**2 - Δβ**2  # s**2
     s = np.lib.scimath.sqrt(s_2)
+
+    return s, s_2, L, κ, κ0, Δβ
+
+def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
+
+    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ)
 
     # auxiliary variables
     sL = s*L
@@ -54,13 +58,23 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
         x = np.sum(R(A_b, λ, A, Δλ), axis=-1)
 
     elif vars.topology == 'serial':
+        T = 1
+        for i, j, k in zip(A_b.T, A.T, Δλ.T):
+            s, s_2, L, κ, κ0, Δβ = partial_R(i.T, λ, j.T, k.T)
+            sL = s*L
+            cosh_sL = np.cosh(sL)
+            sinh_sL = np.sinh(sL)
+            new_T = np.stack([cosh_sL - 1j*Δβ/s*sinh_sL,
+                            -κ/s*sinh_sL])
+            new_T = np.stack([new_T, np.conjugate(new_T[::-1])])
+            T = T*j*new_T
+        R = T[0,1]/T[0,0]
+
+    elif vars.topology == 'serial_old':
         x = 0
-        t = 1
         for i, j, k in zip(A_b.T, A.T, Δλ.T):
             x_next = R(i.T, np.squeeze(λ), j.T, k.T)
-            S = 1/(1-x_next*x)
-            x = x + (1-x)**2*x_next*S
-            t = t*(1-x_next)*S
+            x = x + (1-x)**2*x_next/(1-x_next*x)
     return x
 
 
