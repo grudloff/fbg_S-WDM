@@ -58,28 +58,29 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
         x = np.sum(R(A_b, λ, A, Δλ), axis=-1)
 
     elif vars.topology == 'serial':
-        T_prev = 1
+        T_prev = None
         for b, a, l in zip(A_b.T, A.T, Δλ.T):
             s, s_2, L, κ, κ0, Δβ = partial_R(b.T, np.squeeze(λ), a.T, l.T)
             sL = s*L
             cosh_sL = np.cosh(sL)
             sinh_sL = np.sinh(sL)
-            T1 = np.stack([cosh_sL - 1j*Δβ/s*sinh_sL,
-                            1j*κ/s*sinh_sL])
-            T2 = np.stack([-1j*κ/s*sinh_sL,
-                           cosh_sL + 1j*Δβ/s*sinh_sL])
-            T = np.stack([T1, T2])
-            #TODO check if this is ok
+            T = np.array([[cosh_sL - 1j*Δβ/s*sinh_sL, -1j*κ/s*sinh_sL],
+                          [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
             # atenuation
             crot_a = a**(1.0/4)
             T[0, :] *= 1/crot_a
             T[1, :] *= crot_a
-            T_prev = T_prev*T
+            if T_prev is None:
+                T_prev = T
+            else:
+                # matmul of first two dimensions
+                T_prev = np.einsum('ij...,jk...->ik...', T, T_prev)
+
         T = T_prev
-        x = T[0,1]/T[0,0]
+        x = T[1,0]/T[0,0]
         x = np.abs(x)**2
         # normalization 
-        x = x/np.max(x)*np.max(A)
+        #x = x/np.max(x)*np.max(A)
 
     elif vars.topology == 'serial_old':
         x = 0
