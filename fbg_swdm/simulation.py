@@ -58,22 +58,28 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
         x = np.sum(R(A_b, λ, A, Δλ), axis=-1)
 
     elif vars.topology == 'serial':
-        T = 1
-        for i, j, k in zip(A_b.T, A.T, Δλ.T):
-            s, s_2, L, κ, κ0, Δβ = partial_R(i.T, np.squeeze(λ), j.T, k.T)
+        T_prev = 1
+        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+            s, s_2, L, κ, κ0, Δβ = partial_R(b.T, np.squeeze(λ), a.T, l.T)
             sL = s*L
             cosh_sL = np.cosh(sL)
             sinh_sL = np.sinh(sL)
-            new_T = np.stack([cosh_sL - 1j*Δβ/s*sinh_sL,
-                            -κ/s*sinh_sL])
-            new_T = np.stack([new_T, np.conjugate(new_T[::-1])])
-            #TODO check this is ok
-            tanh_κ0L = np.tanh(κ0*L)
-            new_T *= np.diag([1/tanh_κ0L, tanh_κ0L]) # normalization
-            new_T[:, 1] *= np.diag([1/sqrt(j),sqrt(j)]) # atenuation
-            T = T*new_T
+            T1 = np.stack([cosh_sL - 1j*Δβ/s*sinh_sL,
+                            1j*κ/s*sinh_sL])
+            T2 = np.stack([-1j*κ/s*sinh_sL,
+                           cosh_sL + 1j*Δβ/s*sinh_sL])
+            T = np.stack([T1, T2])
+            #TODO check if this is ok
+            # atenuation
+            crot_a = a**(1.0/4)
+            T[0, :] *= 1/crot_a
+            T[1, :] *= crot_a
+            T_prev = T_prev*T
+        T = T_prev
         x = T[0,1]/T[0,0]
         x = np.abs(x)**2
+        # normalization 
+        x = x/np.max(x)*np.max(A)
 
     elif vars.topology == 'serial_old':
         x = 0
