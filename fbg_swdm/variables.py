@@ -2,7 +2,7 @@ import numpy as np
 from math import pi as π
 from math import sqrt
 
-figsize = (10, 5)
+figsize = (20, 10)
 
 # prefixes
 μ = 10**-6  # micro
