@@ -557,7 +557,7 @@ class base_model(pl.LightningModule):
             scheduler = dict(scheduler=scheduler, monitor='val_MAE',
                              #reduce_on_plateau=True,
                              strict =  False,
-                             interval = "step")
+                             interval = "epoch")
             scheduler_list.append(scheduler)
         
         if scheduler_list:
