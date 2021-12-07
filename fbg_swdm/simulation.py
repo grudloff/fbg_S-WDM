@@ -35,12 +35,22 @@ def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
     cosh_sL_2 = np.cosh(sL)**2
 
     R = κ**2*sinh_sL_2/(Δβ**2*sinh_sL_2 + s_2*cosh_sL_2)
-    R = R/np.tanh(κ0*L)**2  # normalization
+
+    #R = R/np.tanh(κ0*L)**2  # normalization
     R = np.abs(R)  # amplitude
     R = R*A
 
     return R
 
+def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
+    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ)
+    sL = s*L
+    cosh_sL = np.cosh(sL)
+    sinh_sL = np.sinh(sL)
+
+    T = np.array([[cosh_sL - 1j*Δβ/s*sinh_sL, -1j*κ/s*sinh_sL],
+                    [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
+    return T
 
 def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
     if len(A_b.shape) > 1:
@@ -57,36 +67,153 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
     if vars.topology == 'parallel':
         x = np.sum(R(A_b, λ, A, Δλ), axis=-1)
 
-    elif vars.topology == 'serial':
-        T_prev = None
+    elif vars.topology == 'serial_new':
+
+        T_prev = np.identity(2)
+ 
+        at = 1
         for b, a, l in zip(A_b.T, A.T, Δλ.T):
-            s, s_2, L, κ, κ0, Δβ = partial_R(b.T, np.squeeze(λ), a.T, l.T)
-            sL = s*L
-            cosh_sL = np.cosh(sL)
-            sinh_sL = np.sinh(sL)
-            T = np.array([[cosh_sL - 1j*Δβ/s*sinh_sL, -1j*κ/s*sinh_sL],
-                          [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
+            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+
             # atenuation
-            crot_a = a**(1.0/4)
-            T[0, :] *= 1/crot_a
-            T[1, :] *= crot_a
-            if T_prev is None:
-                T_prev = T
-            else:
-                # matmul of first two dimensions
-                T_prev = np.einsum('ij...,jk...->ik...', T, T_prev)
+            at = float(a)/at #atenuation depends on previous atenuations
+            At = np.diag([at**(-1.0/4), at**(1.0/4)])
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
+
+            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T)
 
         T = T_prev
         x = T[1,0]/T[0,0]
         x = np.abs(x)**2
-        # normalization 
-        #x = x/np.max(x)*np.max(A)
 
-    elif vars.topology == 'serial_old':
+    elif vars.topology == 'serial_rand':
+        
+        M = 100 # batch_size
+        N = 100 # number of batches
+
+        x_vect = np.empty((N, len(λ)))
+        for n in range(N):
+            T_prev = np.identity(2)
+            at = 1
+            i = 1 # fbg number
+            for b, a, l in zip(A_b.T, A.T, Δλ.T):
+                T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+
+                # atenuation
+                at = float(a)/at #atenuation depends on previous atenuations
+                At = np.diag([at**(-1.0/4), at**(1.0/4)])
+                T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
+
+                # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
+                T_prev = np.einsum('ij...,jk...->ik...', T_prev, T[..., None])
+
+                # random gap phase change
+                if i < vars.Q:
+                    F = 1j*vars.π*2*np.random.rand(M)[None, :]*np.array([-1, 1])[:, None]
+                    F = np.exp(F)
+                    F = np.identity(2)[..., None]*F[None,...]
+                    T_prev = np.einsum('ij...,jk...->ik...', T_prev, F[:,:,None])
+
+                i += 1
+
+            T = T_prev
+            x = T[1,0]/T[0,0]
+            x = np.abs(x)**2
+            x = np.mean(x, axis=-1) # average different paths
+            x_vect[n] = x
+        
+        x = np.mean(x_vect, axis=0)
+
+
+    elif vars.topology == 'serial_phase':
+        
+        N=vars.φN
+        #phase = np.arange(0,1,1.0/N)
+        phase = np.linspace(1/N/2,1- 1/N/2, N)
+        phase = 1j*vars.π*phase
+        F = phase[None, :]*np.array([-1, 1])[:, None]
+        F = np.exp(F)
+        F = np.identity(2)[..., None]*F[None,...]
+
+        T_prev = np.identity(2)
+        at = 1
+        i = 1 # fbg number
+        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+
+            # atenuation
+            at = float(a)/at #atenuation depends on previous atenuations
+            At = np.diag([at**(-1.0/4), at**(1.0/4)])
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
+
+            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T[..., None])
+
+            # scan gap phase change
+            if i < vars.Q:
+                # simultaneous matmul of first two dimensions
+                # and outer product of gap phase dimensions
+                T_prev = np.einsum('ij...l,jk...m->ik...lm', T_prev, F[:,:,None,None])
+                # flatten outer product
+                T_prev = T_prev.reshape(*T_prev.shape[:-2], -1)
+
+            i += 1
+
+        T = T_prev
+        x = T[1,0]/T[0,0]
+        x = np.abs(x)**2
+        x = np.mean(x, axis=-1) # average different paths
+
+    elif vars.topology == 'serial_abs':
+        
+        T_prev = np.identity(2)
+        at = 1
+
+        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+            r = R(b.T, np.squeeze(λ), 1, l.T)
+            t = 1-r
+
+            T = 1/t[None,None,:] \
+                *np.array([[np.ones_like(r), -r],
+                           [r, 1-2*r]])
+            # t**2-r**2 = 1-2r
+
+            # atenuation
+            at = float(a)/at #atenuation depends on previous atenuations
+            At = np.diag([at**(-1.0/2), at**(1.0/2)])
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
+
+            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T)
+
+        T = T_prev
+        x = T[1,0]/T[0,0]
+
+    elif vars.topology == 'serial':
         x = 0
-        for i, j, k in zip(A_b.T, A.T, Δλ.T):
-            x_next = R(i.T, np.squeeze(λ), j.T, k.T)
+        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+            x_next = R(b.T, np.squeeze(λ), a, l.T)
             x = x + (1-x)**2*x_next/(1-x_next*x)
+
+    elif vars.topology == 'serial_rec':
+        r = 0
+        t = 1
+        at = 1
+        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+            at = float(a)/at
+            r_next = R(b.T, np.squeeze(λ), 1, l.T)
+            t_next = 1 - r_next
+            S = 1/(1 - at*r*r_next) # resonance
+            r = r + at*r_next*t**2*S
+            t = sqrt(at)*t*t_next*S
+        x = r
+
+    else:
+        raise ValueError()
+
+    x = np.squeeze(x)
+
     return x
 
 
@@ -97,7 +224,7 @@ def gen_data(train_dist="mesh", portion=0.6):
 
     if train_dist == "mesh":
         y_train = np.linspace(vars.λ0-Δ, vars.λ0+Δ,
-                              int(vars.M**(1/vars.Q)))  # 1d array
+                              int(np.ceil(vars.M**(1/vars.Q))))  # 1d array
         aux = [y_train for _ in range(vars.Q)]
         y_train = np.meshgrid(*aux)  # 2d mesh from that array
         y_train = np.reshape(y_train, (vars.Q, vars.M)).T
