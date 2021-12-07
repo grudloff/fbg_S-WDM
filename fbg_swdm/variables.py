@@ -45,3 +45,5 @@ M_p = 1-1/V**2  # Portion of power in core
 # fbg properties
 # fbg strength
 S = 1  # S = κ*L in [1,3] ranging from saturated to strong grating
+
+vars.φN = 10
