@@ -52,7 +52,13 @@ def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
                     [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
     return T
 
-def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
+def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
+
+    if batch_size != None:
+        n = vars.M//batch_size
+        x = np.concatenate([X(a_b, λ, A, Δλ) for a_b in np.array_split(A_b, n)])
+        return x
+
     if len(A_b.shape) > 1:
         A_b = A_b[:, None, :]
         λ = λ[None, :, None]
@@ -89,41 +95,34 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
 
     elif vars.topology == 'serial_rand':
         
-        M = 100 # batch_size
-        N = 100 # number of batches
+        M = 10000 # batch_size
+        T_prev = np.identity(2)
+        at = 1
+        i = 1 # fbg number
+        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
 
-        x_vect = np.empty((N, len(λ)))
-        for n in range(N):
-            T_prev = np.identity(2)
-            at = 1
-            i = 1 # fbg number
-            for b, a, l in zip(A_b.T, A.T, Δλ.T):
-                T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+            # atenuation
+            at = float(a)/at #atenuation depends on previous atenuations
+            At = np.diag([at**(-1.0/4), at**(1.0/4)])
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
 
-                # atenuation
-                at = float(a)/at #atenuation depends on previous atenuations
-                At = np.diag([at**(-1.0/4), at**(1.0/4)])
-                T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
+            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
+            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T[..., None])
 
-                # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
-                T_prev = np.einsum('ij...,jk...->ik...', T_prev, T[..., None])
+            # random gap phase change
+            if i < vars.Q:
+                F = 1j*vars.π*2*np.random.rand(M)[None, :]*np.array([-1, 1])[:, None]
+                F = np.exp(F)
+                F = np.identity(2)[..., None]*F[None,...]
+                T_prev = np.einsum('ij...,jk...->ik...', T_prev, F[:,:,None])
 
-                # random gap phase change
-                if i < vars.Q:
-                    F = 1j*vars.π*2*np.random.rand(M)[None, :]*np.array([-1, 1])[:, None]
-                    F = np.exp(F)
-                    F = np.identity(2)[..., None]*F[None,...]
-                    T_prev = np.einsum('ij...,jk...->ik...', T_prev, F[:,:,None])
+            i += 1
 
-                i += 1
-
-            T = T_prev
-            x = T[1,0]/T[0,0]
-            x = np.abs(x)**2
-            x = np.mean(x, axis=-1) # average different paths
-            x_vect[n] = x
-        
-        x = np.mean(x_vect, axis=0)
+        T = T_prev
+        x = T[1,0]/T[0,0]
+        x = np.abs(x)**2
+        x = np.mean(x, axis=-1) # average different paths
 
 
     elif vars.topology == 'serial_phase':
@@ -218,7 +217,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ):
 
 
 # gen M datapoints on an N-sized spectrum
-def gen_data(train_dist="mesh", portion=0.6):
+def gen_data(train_dist="mesh", portion=0.6, batch_size=None):
+
 
     Δ = portion*vars.Δ
 
@@ -236,8 +236,8 @@ def gen_data(train_dist="mesh", portion=0.6):
                                                       vars.Q])
 
     # broadcast shape: N, M, FBGN
-    X_train = X(y_train, vars.λ, vars.A, vars.Δλ)
-    X_test = X(y_test, vars.λ, vars.A, vars.Δλ)
+    X_train = X(y_train, vars.λ, vars.A, vars.Δλ, batch_size)
+    X_test = X(y_test, vars.λ, vars.A, vars.Δλ, batch_size)
 
     return X_train, y_train, X_test, y_test
 
