@@ -583,15 +583,6 @@ class encoder_model(base_model):
                          **kwargs)
 
         if encoder_type == 'dense':
-            self.encoder = dense_encoder(num_layers, num_head_layers)
-        elif encoder_type == 'residual':
-            self.encoder = residual_encoder(num_layers, num_head_layers)
-        elif issubclass(encoder_type, nn.Module):
-            self.encoder = encoder_type(num_layers, num_head_layers)
-        else:
-            raise ValueError("encoder_type must be {'dense','residual'} or a subclass of nn.Module")
-
-        if encoder_type == 'dense':
             encoder = dense_encoder
         elif encoder_type == 'residual':
             encoder = residual_encoder
