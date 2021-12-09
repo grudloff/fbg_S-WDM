@@ -23,11 +23,11 @@ def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
     s_2 = κ**2 - Δβ**2  # s**2
     s = np.lib.scimath.sqrt(s_2)
 
-    return s, s_2, L, κ, κ0, Δβ
+    return s, s_2, L, κ, Δβ
 
 def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
 
-    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
+    s, s_2, L, κ, Δβ = partial_R(λb, λ, A, Δλ, S)
 
     # auxiliary variables
     sL = s*L
@@ -36,7 +36,6 @@ def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
 
     R = κ**2*sinh_sL_2/(Δβ**2*sinh_sL_2 + s_2*cosh_sL_2)
 
-    #R = R/np.tanh(κ0*L)**2  # normalization
     R = np.abs(R)  # amplitude
     R = R*A
 
@@ -46,7 +45,7 @@ def get_max_R(S=vars.S):
     return np.tanh(S)**2
 
 def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
-    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
+    s, s_2, L, κ, Δβ = partial_R(λb, λ, A, Δλ, S)
     sL = s*L
     cosh_sL = np.cosh(sL)
     sinh_sL = np.sinh(sL)
