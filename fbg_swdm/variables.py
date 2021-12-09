@@ -17,11 +17,11 @@ test_M = 1000
 
 # FBG Characterization
 Q = 2  # Number of FBGs
-A = np.array([1, 0.5])  # Peak Intensities
+A = np.array([1, 0.5])  # Atenuation
 Δλ = np.array([0.2*n, 0.2*n])  # Linewidth
 λ0 = 1550*n  # Central Wavelength
-# fbg strength
-S = np.array([1,1])  #S = κ*L in [1,3] ranging from saturated to strong grating
+S = np.array([1,1])  # fbg strength
+#S = κ*L in [1,3] ranging from saturated to strong grating
 
 Δ = 2*n  # Range of Wavelength change
 λ = np.linspace(λ0 - Δ, λ0 + Δ, N)  # Wavelength
