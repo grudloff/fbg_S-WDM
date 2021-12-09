@@ -176,7 +176,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         T_prev = np.identity(2)
         at = 1
 
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T):
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             r = R(b.T, np.squeeze(λ), 1, l.T, s.T)
             t = 1-r
 
