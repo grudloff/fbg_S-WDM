@@ -44,6 +44,12 @@ def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
 def get_max_R(S=vars.S):
     return np.tanh(S)**2
 
+def get_S(P):
+    if np.max(P) > 0.99:
+        raise ValueError('Values should be lower than 0.99')
+    S = np.arctanh(np.sqrt(P))
+    return S
+
 def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
     s, s_2, L, κ, Δβ = partial_R(λb, λ, A, Δλ, S)
     sL = s*L
