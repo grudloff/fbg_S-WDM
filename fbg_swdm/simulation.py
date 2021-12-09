@@ -11,12 +11,12 @@ from math import sqrt
 def gaussian_R(λb, λ, A=1, Δλ=0.4*vars.n):
     return A*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
 
-def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
+def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
     # Δn in relation to Δλ assuming L=S/κ
-    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.M_p/vars.λ0/vars.S))
+    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.M_p/vars.λ0/S))
 
     κ0 = vars.π*Δn/vars.λ0*vars.M_p
-    L = vars.S/κ0  # length
+    L = S/κ0  # length
     κ = vars.π*Δn/λ*vars.M_p
     
     Δβ = 2*vars.π*vars.n_eff*(1/λ - 1/λb)  # Δβ = β - π/Λ
@@ -25,9 +25,9 @@ def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
 
     return s, s_2, L, κ, κ0, Δβ
 
-def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
+def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
 
-    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ)
+    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
 
     # auxiliary variables
     sL = s*L
@@ -42,8 +42,12 @@ def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
 
     return R
 
-def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
-    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ)
+def get_max_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
+    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
+    return np.tanh(κ0*L)**2
+
+def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
+    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
     sL = s*L
     cosh_sL = np.cosh(sL)
     sinh_sL = np.sinh(sL)
@@ -52,11 +56,12 @@ def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0]):
                     [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
     return T
 
-def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
+def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
     if batch_size != None:
         n = vars.M//batch_size
-        x = np.concatenate([X(a_b, λ, A, Δλ) for a_b in np.array_split(A_b, n)])
+        A_b = np.array_split(A_b, n)]
+        x = np.concatenate([X(a_b, λ, A, Δλ, S) for a_b in A_b)
         return x
 
     if len(A_b.shape) > 1:
@@ -64,22 +69,24 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
         λ = λ[None, :, None]
         A = A[None, None, :]
         Δλ = Δλ[None, None, :]
+        S = S[None, None, :]
     else:
         A_b = A_b[None, :]
         λ = λ[:, None]
         A = A[None, :]
         Δλ = Δλ[None, :]
+        S = S[None, :]
 
     if vars.topology == 'parallel':
-        x = np.sum(R(A_b, λ, A, Δλ), axis=-1)
+        x = np.sum(R(A_b, λ, A, Δλ, S), axis=-1)
 
     elif vars.topology == 'serial_new':
 
         T_prev = np.identity(2)
  
         at = 1
-        for b, a, l in zip(A_b.T, A.T, Δλ.T):
-            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
+            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T ,s.T)
 
             # atenuation
             at = float(a)/at #atenuation depends on previous atenuations
@@ -99,8 +106,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
         T_prev = np.identity(2)
         at = 1
         i = 1 # fbg number
-        for b, a, l in zip(A_b.T, A.T, Δλ.T):
-            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
+            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T, s.T)
 
             # atenuation
             at = float(a)/at #atenuation depends on previous atenuations
@@ -138,8 +145,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
         T_prev = np.identity(2)
         at = 1
         i = 1 # fbg number
-        for b, a, l in zip(A_b.T, A.T, Δλ.T):
-            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T)
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
+            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T, s.T)
 
             # atenuation
             at = float(a)/at #atenuation depends on previous atenuations
@@ -169,8 +176,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
         T_prev = np.identity(2)
         at = 1
 
-        for b, a, l in zip(A_b.T, A.T, Δλ.T):
-            r = R(b.T, np.squeeze(λ), 1, l.T)
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T):
+            r = R(b.T, np.squeeze(λ), 1, l.T, s.T)
             t = 1-r
 
             T = 1/t[None,None,:] \
@@ -191,21 +198,21 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, batch_size=None):
 
     elif vars.topology == 'serial':
         x = 0
-        for b, a, l in zip(A_b.T, A.T, Δλ.T):
-            x_next = R(b.T, np.squeeze(λ), a, l.T)
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
+            x_next = R(b.T, np.squeeze(λ), a, l.T, s.T)
             x = x + (1-x)**2*x_next/(1-x_next*x)
 
     elif vars.topology == 'serial_rec':
         r = 0
         t = 1
         at = 1
-        for b, a, l in zip(A_b.T, A.T, Δλ.T):
+        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             at = float(a)/at
-            r_next = R(b.T, np.squeeze(λ), 1, l.T)
+            r_next = R(b.T, np.squeeze(λ), 1, l.T, s.T)
             t_next = 1 - r_next
-            S = 1/(1 - at*r*r_next) # resonance
-            r = r + at*r_next*t**2*S
-            t = sqrt(at)*t*t_next*S
+            F = 1/(1 - at*r*r_next) # resonance
+            r = r + at*r_next*t**2*F
+            t = sqrt(at)*t*t_next*F
         x = r
 
     else:
@@ -236,8 +243,8 @@ def gen_data(train_dist="mesh", portion=0.6, batch_size=None):
                                                       vars.Q])
 
     # broadcast shape: N, M, FBGN
-    X_train = X(y_train, vars.λ, vars.A, vars.Δλ, batch_size)
-    X_test = X(y_test, vars.λ, vars.A, vars.Δλ, batch_size)
+    X_train = X(y_train, vars.λ, vars.A, vars.Δλ, vars.S, batch_size)
+    X_test = X(y_test, vars.λ, vars.A, vars.Δλ, vars.S, batch_size)
 
     return X_train, y_train, X_test, y_test
 
@@ -248,7 +255,8 @@ def plot_datapoint(X, Y, N_datapoint = 1):
     plt.plot(vars.λ/vars.n, X[N_datapoint, :], label="$\sum FBGi$")
     for i in range(vars.Q):
         plt.plot(vars.λ/vars.n, R(vars.λ[:, None], Y[N_datapoint, None, i],
-                 vars.A[None, i], vars.Δλ[None, i]), linestyle='dashed',
+                 vars.A[None, i], vars.Δλ[None, i], vars.S[None, i]),
+                 linestyle='dashed',
                  label="FBG"+str(i))
     plt.stem(Y[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
              basefmt="None", use_line_collection=True)
