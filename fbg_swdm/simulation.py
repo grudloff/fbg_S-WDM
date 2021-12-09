@@ -266,6 +266,7 @@ def plot_datapoint(X, Y, N_datapoint = 1):
 
 
 def plot_dist(X_train, y_train, X_test, y_test):
+    # Only works for Q=2
     plt.figure(figsize=(10, 10))
     plt.title("Distribution of samples")
     plt.scatter(y_train[:, 0]/vars.n, y_train[:, 1]/vars.n, s=2, label="train")
@@ -280,13 +281,13 @@ def plot_freq_dist(X_train, y_train, X_test, y_test):
     plt.title("Train Histogram")
     plt.xlabel("[nm]")
     plt.hist(y_train/vars.n, bins=100, stacked=True, density=True,
-             label=["FBG1", "FBG2"])
+             label=["FBG"+str(i) for i in range(vars.Q)])
     plt.legend()
     plt.figure(figsize=(10, 5))
     plt.title("Test Histogram")
     plt.xlabel("[nm]")
     plt.hist(y_test/vars.n, bins=100, stacked=True, density=True,
-             label=["FBG1", "FBG2"])
+             label=["FBG"+str(i) for i in range(vars.Q)])
     plt.legend()
 
 
