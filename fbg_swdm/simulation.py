@@ -42,9 +42,8 @@ def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
 
     return R
 
-def get_max_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
-    s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
-    return np.tanh(κ0*L)**2
+def get_max_R(S=vars.S):
+    return np.tanh(S)**2
 
 def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
     s, s_2, L, κ, κ0, Δβ = partial_R(λb, λ, A, Δλ, S)
