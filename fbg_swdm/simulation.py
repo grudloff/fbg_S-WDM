@@ -60,8 +60,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
     if batch_size != None:
         n = vars.M//batch_size
-        A_b = np.array_split(A_b, n)]
-        x = np.concatenate([X(a_b, λ, A, Δλ, S) for a_b in A_b)
+        A_b = np.array_split(A_b, n)
+        x = np.concatenate([X(a_b, λ, A, Δλ, S) for a_b in A_b])
         return x
 
     if len(A_b.shape) > 1:
