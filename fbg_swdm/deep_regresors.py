@@ -404,8 +404,7 @@ class base_model(pl.LightningModule):
         self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
                                           'optimizer_kwargs','scheduler',
                                           'scheduler_kwargs',
-                                          'reduce_on_plateau', 'noise',
-                                          'encoder_kwargs'],
+                                          'reduce_on_plateau', 'noise'],
                                   logger=False)
 
         if weights is None:
