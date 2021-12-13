@@ -437,11 +437,13 @@ class base_model(pl.LightningModule):
             break
 
     def metric(self, outputs, targets):
-        y, latent = outputs
+        x, y = targets
+        y_hat, latent = outputs
         return F.l1_loss(y, targets)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
-        y, latent = outputs
+        x, y = targets
+        y_hat, latent = outputs
         return torch.norm(latent, p=2, dim=-1).mean()
 
     def on_train_start(self):
@@ -627,11 +629,13 @@ class autoencoder_model(encoder_model):
         return x, y, latent
 
     def metric(self, outputs, targets):
-        x, y, latent  = outputs
+        x, y = targets
+        x_hat, y_hat, latent = outputs
         return F.l1_loss(y, targets)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
-        x, y, latent  = outputs
+        x, y = targets
+        x_hat, y_hat, latent  = outputs
         return torch.norm(latent, p=2, dim=-1).mean()
 
     def loss(self, outputs, targets):
