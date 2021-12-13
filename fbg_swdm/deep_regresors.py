@@ -560,10 +560,9 @@ class base_model(pl.LightningModule):
         else:
             return optimizer
 
-    def predict(self, x):
-        x = torch.tensor(x, dtype=torch.get_default_dtype(), device=self.device)
-        x, _ = self.forward(x)
-        return x.detach().cpu().numpy()
+    def predict(self, X):
+        X = self.prep_dataloader((X,))
+        return np.concatenate([self(x[0])[0].detach().cpu().numpy() for x in X])
 
 
 class encoder_model(base_model):
