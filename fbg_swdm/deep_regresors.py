@@ -437,12 +437,12 @@ class base_model(pl.LightningModule):
             break
 
     def metric(self, outputs, targets):
-        outputs, _ = outputs
-        return F.l1_loss(outputs, targets)*vars.Δ/vars.p
+        y, latent = outputs
+        return F.l1_loss(y, targets)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
-        _, latents = outputs
-        return torch.norm(latents, p=2, dim=-1).mean()
+        y, latent = outputs
+        return torch.norm(latent, p=2, dim=-1).mean()
 
     def on_train_start(self):
         self.logger.log_hyperparams(self.hparams, 
@@ -457,21 +457,23 @@ class base_model(pl.LightningModule):
             noise = sigma*torch.randn_like(x)
             x += noise
         outputs = self.forward(x)
-        loss = self.loss(outputs, y)
+        targets = train_batch
+        loss = self.loss(outputs, targets)
         self.log('train_loss', loss, prog_bar=True)
-        metric = self.metric(outputs, y)
+        metric = self.metric(outputs, targets)
         self.log('train_MAE', metric, prog_bar=True)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
         outputs = self.forward(x)
-        loss = self.loss(outputs, y)
+        targets = val_batch
+        loss = self.loss(outputs, targets)
         self.log('val_loss', loss, prog_bar=True)
-        metric = self.metric(outputs, y)
+        metric = self.metric(outputs, targets)
         self.log('val_MAE', metric, prog_bar=True)
         self.log('hp/val_MAE', metric)
-        self.log('hp/l2', self.l2(outputs, y))
+        self.log('hp/l2', self.l2(outputs, targets))
 
     def get_progress_bar_dict(self):
         items = super().get_progress_bar_dict()
@@ -602,7 +604,7 @@ class encoder_model(base_model):
         return self.encoder(x)
 
     def loss(self, outputs, targets):
-        y = targets
+        x, y = targets
         y_hat, latent = outputs
 
         # weighted regression loss
@@ -624,36 +626,13 @@ class autoencoder_model(encoder_model):
         x = self.decoder(latent)
         return x, y, latent
 
-    def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
-        if self.noise:
-            sigma = 1e-2
-            sigma = sigma*torch.rand((x.size(0), 1), dtype=x.dtype,
-                                         layout=x.layout, device=x.device)
-            noise = sigma*torch.randn_like(x)
-            x += noise
-        outputs = self.forward(x)
-        targets = x, y
-        loss = self.loss(outputs, targets)
-        self.log('train_loss', loss, prog_bar=True)
-        metric = self.metric(outputs, y)
-        self.log('train_MAE', metric, prog_bar=True)
-        return loss
-
-    def validation_step(self, val_batch, batch_idx):
-        x, y = val_batch
-        outputs = self.forward(x)
-        targets = x, y
-        loss = self.loss(outputs, targets)
-        self.log('val_loss', loss, prog_bar=True)
-        metric = self.metric(outputs, y)
-        self.log('val_MAE', metric, prog_bar=True)
-        self.log('hp/val_MAE', metric)
-        self.log('hp/l2', self.l2(outputs, y))
-
     def metric(self, outputs, targets):
-        x, y, latent = outputs
+        x, y, latent  = outputs
         return F.l1_loss(y, targets)*vars.Δ/vars.p
+
+    def l2(self, outputs, targets):
+        x, y, latent  = outputs
+        return torch.norm(latent, p=2, dim=-1).mean()
 
     def loss(self, outputs, targets):
         x, y = targets
