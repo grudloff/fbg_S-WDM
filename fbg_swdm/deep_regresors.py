@@ -478,23 +478,20 @@ class base_model(pl.LightningModule):
         items.pop("loss", None)
         return items
 
+    def prep_dataloader(self, Z, shuffle=False):
+        Z = map(lambda x: tensor(x, dtype=torch.get_default_dtype(), 
+                                 device=self.device),
+                   Z)
+        ds = TensorDataset(*Z)
+        return DataLoader(ds, self.hparams.batch_size, shuffle)
+
     def train_dataloader(self):
-        X_train, y_train = self.data[0:2]
-        X_train, y_train = map(lambda x: tensor(x,
-                                                dtype=torch.get_default_dtype(),
-                                                ),
-                               (X_train, y_train))
-        train_ds = TensorDataset(X_train, y_train)
-        return DataLoader(train_ds, self.hparams.batch_size, shuffle=True)
+        X, y = self.data[0:2]
+        return self.prep_dataloader((X, y), shuffle=True)
 
     def val_dataloader(self):
-        X_test, y_test =self.data[2:]
-        X_test, y_test = map(lambda x: tensor(x,
-                                                dtype=torch.get_default_dtype(),
-                                                ),
-                               (X_test, y_test))
-        test_ds = TensorDataset(X_test, y_test)
-        return DataLoader(test_ds, self.hparams.batch_size)
+        X, y = self.data[2:]
+        return self.prep_dataloader((X, y))
 
     def configure_optimizers(self):
         if self.optimizer == 'adam':
