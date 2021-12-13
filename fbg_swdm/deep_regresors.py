@@ -439,7 +439,7 @@ class base_model(pl.LightningModule):
     def metric(self, outputs, targets):
         x, y = targets
         y_hat, latent = outputs
-        return F.l1_loss(y, targets)*vars.Δ/vars.p
+        return F.l1_loss(y, y_hat)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
         x, y = targets
@@ -631,7 +631,7 @@ class autoencoder_model(encoder_model):
     def metric(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
-        return F.l1_loss(y, targets)*vars.Δ/vars.p
+        return F.l1_loss(y, y_hat)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
         x, y = targets
