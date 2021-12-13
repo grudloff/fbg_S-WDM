@@ -103,8 +103,8 @@ def check_latent(model, K=10,  **kwargs):
         input = torch.tensor(test, dtype=torch.get_default_dtype(), device=model.device)
         input = input.unsqueeze(0) # add batch dim
         y_hat, latent = model(input)
-        y_hat = np.squeeze(y_hat.detach().numpy())
-        latent = latent.detach().numpy()
+        y_hat = np.squeeze(y_hat.detach().cpu().numpy())
+        latent = latent.detach().cpu().numpy()
         latent = latent.T
         latent = np.squeeze(latent)
         plt.figure()
