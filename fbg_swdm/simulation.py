@@ -303,9 +303,6 @@ def normalize(X_train, y_train, X_test, y_test):
     if vars.topology == 'parallel':
         X_train = X_train/np.sum(vars.A)
         X_test = X_test/np.sum(vars.A)
-    if vars.topology == 'serial':
-        X_train = X_train/np.max(vars.A)
-        X_test = X_test/np.max(vars.A)        
 
     return X_train, y_train, X_test, y_test
 
@@ -316,9 +313,5 @@ def denormalize(X_train, y_train, X_test, y_test):
     if vars.topology == 'parallel':
         X_train = X_train*np.sum(vars.A)
         X_test = X_test*np.sum(vars.A)
-    if vars.topology == 'serial':
-        X_train = X_train*np.max(vars.A)
-        X_test = X_test*np.max(vars.A) 
-
 
     return X_train, y_train, X_test, y_test
