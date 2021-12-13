@@ -624,6 +624,33 @@ class autoencoder_model(encoder_model):
         x = self.decoder(latent)
         return x, y, latent
 
+    def training_step(self, train_batch, batch_idx):
+        x, y = train_batch
+        if self.noise:
+            sigma = 1e-2
+            sigma = sigma*torch.rand((x.size(0), 1), dtype=x.dtype,
+                                         layout=x.layout, device=x.device)
+            noise = sigma*torch.randn_like(x)
+            x += noise
+        outputs = self.forward(x)
+        targets = x, y
+        loss = self.loss(outputs, targets)
+        self.log('train_loss', loss, prog_bar=True)
+        metric = self.metric(outputs, y)
+        self.log('train_MAE', metric, prog_bar=True)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = val_batch
+        outputs = self.forward(x)
+        targets = x, y
+        loss = self.loss(outputs, targets)
+        self.log('val_loss', loss, prog_bar=True)
+        metric = self.metric(outputs, y)
+        self.log('val_MAE', metric, prog_bar=True)
+        self.log('hp/val_MAE', metric)
+        self.log('hp/l2', self.l2(outputs, y))
+
     def loss(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
