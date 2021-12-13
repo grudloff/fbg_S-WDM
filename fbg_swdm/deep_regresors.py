@@ -365,6 +365,7 @@ class dilated_encoder(nn.Module):
 
 class decoder(nn.Module):
     def __init__(self):
+        super().__init__()
         #output transposed conv
         in_channels = vars.Q
         out_channels = vars.Q
