@@ -651,6 +651,10 @@ class autoencoder_model(encoder_model):
         self.log('hp/val_MAE', metric)
         self.log('hp/l2', self.l2(outputs, y))
 
+    def metric(self, outputs, targets):
+        x, y, latent = outputs
+        return F.l1_loss(y, targets)*vars.Δ/vars.p
+
     def loss(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
@@ -660,7 +664,6 @@ class autoencoder_model(encoder_model):
 
         # reconstruction loss
         rec_loss = F.mse_loss(x_hat, x)
-
 
         loss = (1-self.hparams.gamma)*reg_loss \
                + self.hparams.gamma*rec_loss \
