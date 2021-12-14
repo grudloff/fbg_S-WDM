@@ -652,3 +652,7 @@ class autoencoder_model(encoder_model):
                + self.hparams.gamma*rec_loss \
                + self.hparams.reg*self.reg_func(latent)
         return loss
+
+    def predict(self, X):
+        X = self.prep_dataloader((X,))
+        return np.concatenate([self(x[0])[1].detach().cpu().numpy() for x in X])
