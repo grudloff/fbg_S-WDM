@@ -461,6 +461,9 @@ class base_model(pl.LightningModule):
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
         if self.noise:
+            if isinstance(self.noise, float):
+                sigma = self.noise
+            else:
             sigma = 1e-2
             sigma = sigma*torch.rand((x.size(0), 1), dtype=x.dtype,
                                          layout=x.layout, device=x.device)
