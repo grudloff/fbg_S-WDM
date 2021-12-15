@@ -104,3 +104,27 @@ def check_latent(model, K=10,  **kwargs):
         plt.plot(test)
         plt.plot(latent)
         plt.title('y='+str(y[n])+' y_hat='+str(y_hat))
+
+def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
+    noise_vect = np.linspace(min_snr, max_snr, M)
+    error_vect = np.empty(M)
+    noise_vect = 10.0**(noise_vect/10.0)
+    for i, noise in enumerate(noise_vect):
+        x, y = _gen_sweep(noise=noise, **kwargs)
+
+        if norm:
+            x, = normalize(x)
+            y_hat = model.predict(x)
+            x, y_hat = denormalize(x, y_hat)
+        else:
+            y_hat = model.predict(x)
+
+        error_vect[i] = np.mean(np.abs(y - y_hat))
+    
+    noise_vect = 10*np.log10(noise_vect)
+    
+    plt.figure(figsize=vars.figsize)
+    plt.title('Mean Absolute error vs SNR')
+    plt.ylabel('Mean Absolute_error [pm]')
+    plt.xlabel('SNR [dB]')
+    plt.plot(noise_vect, error_vect)
