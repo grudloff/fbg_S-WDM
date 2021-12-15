@@ -90,4 +90,79 @@ class ELM(BaseEstimator, RegressorMixin):
         return self
 
 
+class lookuptable(BaseEstimator, RegressorMixin):
+    """Lookup Table
+
+    This is a baseline regression model that is essentially
+    a lookup table where the training data constitutes the
+    keys and values and a prediction is made by finding the
+    value that corresponds to the minimum distance between
+    the query and the corresponding key.
+
+    Parameters 
+    ----------
+    distance : {'euclidean', 'cosine'}, default='euclidean'
+        Specifies the distance function to be used in the algorithm.
+        
+
+    Attributes
+    ----------
+    X_ : array-like, shape (n_samples, n_features)
+        Training Samples.
+    y_ : array-like, shape (n_samples, n_targets)
+        Training Targets.
+    """
+
+    def __init__(self, distance = 'euclidean'):
+        self.distance = distance
+
+    def fit(self, X, y):
+        """Fit the model according to the given training data.
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Training Samples.
+        y : array-like, shape (n_samples, n_targets)
+            Training Targets.
+        Returns
+        -------
+        self : object
+            An instance of the model.
+        """
+        X, y = check_X_y(X, y, multi_output=True, dtype='float')
+        self.X_ = X
+        self.y_ = y
+
+        if self.distance == 'euclidean':
+            def dist_func(X):
+                alpha = np.linalg.norm(self.X_ - X[None, ...], axis=-1)
+                return -alpha
+        elif self.distance == 'cosine':
+            def dist_func(X):
+                alpha = np.sum(self.X_*X[None, ...], axis=-1)
+                alpha = alpha/np.linalg.norm(X)/np.linalg.norm(self._X, axis=-1)
+                return alpha
+        self.dist_func = dist_func
+             
         return self
+
+    def predict(self, X):
+        """
+        Predict using the model.
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Samples.
+        Returns
+        -------
+        y : array-like, shape (n_samples, n_targets)
+            Predicted targets.
+        """
+        if len(X.shape)==1:
+            alpha = self.dist_func(X)
+            indx = np.argmax(alpha)
+            y = self.y_[indx]
+        else:
+            y = np.stack([self.predict(x) for x in X])
+            
+        return y
