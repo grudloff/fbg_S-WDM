@@ -33,7 +33,7 @@ def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
     # broadcast shape: N, M, FBGN
     x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
     if noise:
-        x += np.random.randn(*x.shape)*1e-3*noise
+        x += np.random.randn(*x.shape)*noise
     return x, y 
 
 
