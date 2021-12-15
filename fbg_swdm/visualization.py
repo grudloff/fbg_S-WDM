@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
-from fbg_swdm.simulation import R, X
+from fbg_swdm.simulation import X, normalize, denormalize
 
 import torch
 
@@ -38,20 +38,16 @@ def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
 
 
 # Plot sweep of one FBG with the other static
-def plot_sweep(model, normalize=True, rec_error=False, **kwargs):
+def plot_sweep(model, norm=True, rec_error=False, **kwargs):
     
     n_sweep = int(not kwargs['invert']) # select y row that sweeps
 
     x, y = _gen_sweep(**kwargs)
 
-    if normalize:
-        if vars.topology == 'parallel':
-            x = x/np.sum(vars.A)
-            y_hat = vars.λ0+vars.Δ*model.predict(x)
-            x = x*np.sum(vars.A)
-        else:
-            y_hat = vars.λ0+vars.Δ*model.predict(x)
-
+    if norm:
+        x, = normalize(x)
+        y_hat = model.predict(x)
+        x, y_hat = denormalize(x, y_hat)
     else:
         y_hat = model.predict(x)
 

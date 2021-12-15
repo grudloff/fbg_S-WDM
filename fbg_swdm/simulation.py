@@ -295,23 +295,29 @@ def plot_freq_dist(X_train, y_train, X_test, y_test):
     plt.legend()
 
 
-def normalize(X_train, y_train, X_test, y_test):
-    # A = (A-A0)/d
-    y_train = (y_train - vars.λ0)/vars.Δ
-    y_test = (y_test - vars.λ0)/vars.Δ
+def normalize(X=None, y=None, *args):
+    if X is not None:
+        max = np.max(vars.A*get_max_R(vars.S))
+        X = X/max
+        yield X
 
-    if vars.topology == 'parallel':
-        X_train = X_train/np.sum(vars.A)
-        X_test = X_test/np.sum(vars.A)
+    if y is not None:
+        y = (y - vars.λ0)/vars.Δ
+        yield y    
 
-    return X_train, y_train, X_test, y_test
+    if args:
+        yield from normalize(*args)
 
 
-def denormalize(X_train, y_train, X_test, y_test):
-    y_train = y_train*vars.Δ + vars.λ0
-    y_test = y_test*vars.Δ + vars.λ0
-    if vars.topology == 'parallel':
-        X_train = X_train*np.sum(vars.A)
-        X_test = X_test*np.sum(vars.A)
+def denormalize(X=None, y=None, *args):
+    if X is not None:
+        max = np.max(vars.A*get_max_R(vars.S))
+        X = X*max
+        yield X
 
-    return X_train, y_train, X_test, y_test
+    if y is not None:
+        y = y*vars.Δ + vars.λ0
+        yield y    
+
+    if args:
+        yield from normalize(*args)
