@@ -367,6 +367,7 @@ class decoder(nn.Module):
     def __init__(self):
         super().__init__()
         #output transposed conv
+        self.A = nn.Parameter(torch.ones(vars.Q))
         in_channels = vars.Q
         out_channels = vars.Q
         kernel_size = vars.N + 1
@@ -381,13 +382,20 @@ class decoder(nn.Module):
         x = self.transpose_conv(x)
         x = torch.transpose(x, 0, 1) #change batch dim for channel dim
 
-        x_prev = torch.zeros_like(x[0])
+        r = torch.zeros_like(x[0])
+        t = torch.ones_like(x[0])
         # traverse channel dims
-        for x_next in x:
-            x_prev = x_prev + (1-x_prev)**2*x_next/(1-x_next*x_prev)
+        at = 1.0
+        for r_next, a in zip(x, self.A):
+            t_next = 1 - r_next
+            at = a/at
+            F = 1/(1 - at*r*r_next) # resonance
+            r = r + at*r_next*t**2*F
+            t = torch.sqrt(at)*t*t_next*F
 
-        x = x_prev
+        x = r
         return x
+        
 
 # ---------------------------------------------------------------------------- #
 #                               Lightning Models                               #
