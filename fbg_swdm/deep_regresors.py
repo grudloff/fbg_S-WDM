@@ -664,6 +664,23 @@ class autoencoder_model(encoder_model):
                + self.hparams.reg*self.reg_func(latent)
         return loss
 
+    def rec_loss(self, outputs, targets):
+        x, y = targets
+        x_hat, y_hat, latent = outputs
+        return F.mse_loss(x_hat, x)
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = val_batch
+        outputs = self.forward(x)
+        targets = val_batch
+        loss = self.loss(outputs, targets)
+        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_rec_loss', self.rec_loss(outputs, targets))
+        metric = self.metric(outputs, targets)
+        self.log('val_MAE', metric, prog_bar=True)
+        self.log('hp/val_MAE', metric)
+        self.log('hp/l2', self.l2(outputs, targets))
+
     def predict(self, X):
         X = self.prep_dataloader((X,))
         return np.concatenate([self(x[0])[1].detach().cpu().numpy() for x in X])
