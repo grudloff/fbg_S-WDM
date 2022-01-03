@@ -78,6 +78,14 @@ def spread(input: Tensor) -> Tensor:
     return spread.mean()
 
 @torch.jit.script
+def kurtosis(input: Tensor) -> Tensor:
+    x = torch.arange(input.size(-1), device = input.device)
+    mean = torch.sum(x*input, dim=-1, keepdim=True)
+    dist_mean = x - mean
+    K = torch.sum(dist_mean**4*input, dim=-1)/torch.sum(dist_mean**2*input, dim=-1)**2
+    return -K.mean()
+
+@torch.jit.script
 def l1_norm(input: Tensor) -> Tensor:
     return torch.norm(input, 1)
 
