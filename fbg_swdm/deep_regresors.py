@@ -61,9 +61,9 @@ def kl_div_func(rho: float, input: Tensor) -> Tensor:
     dkl = - rho * torch.log(rho_hat) - (1-rho)*torch.log(1-rho_hat)
     return dkl.mean()
 
-def kl_div(hparams):
+def kl_div(rho):
     def func(input):
-        return kl_div_func(hparams.rho, input)
+        return kl_div_func(rho, input)
     return func
 
 @torch.jit.script
@@ -604,17 +604,22 @@ class encoder_model(base_model):
             raise ValueError("encoder_type must be {'dense','residual', 'dilated'} or a subclass of nn.Module")
         self.encoder = encoder(num_layers, num_head_layers, **encoder_kwargs)
 
-        if reg_type == 'l1':
-            self.reg_func = l1_norm
-        elif reg_type == 'kl_div':
-            self.reg_func = kl_div(self.hparams)
-        elif reg_type == 'spread':
-            self.reg_func = spread
-        else:
-            raise ValueError('reg_type has to be {l1, kl_div, spread}')
-
     def forward(self, x):
         return self.encoder(x)
+
+    def setup(self, stage):
+        super().setup(stage)
+    
+        if self.hparams.reg_type == 'l1':
+            self.reg_func = l1_norm
+        elif self.hparams.reg_type == 'kl_div':
+            self.reg_func = kl_div(self.hparams.rho)
+        elif self.hparams.reg_type == 'spread':
+            self.reg_func = spread
+        elif self.hparams.reg_type == 'kurtosis':
+            self.reg_func = kurtosis
+        else:
+            raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
 
     def loss(self, outputs, targets):
         x, y = targets
