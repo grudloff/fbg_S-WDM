@@ -101,10 +101,10 @@ def roughness(input: Tensor) -> Tensor:
 
 # -------------------------------- Model Utils ------------------------------- #
 
-def conv_mish(in_channels, out_channels, kernel_size=1, dilation=1):
+def conv_mish(in_channels, out_channels, kernel_size=1, dilation=1, groups=1):
     # create & initialize conv layer for mish activation
     conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding='same',
-                     dilation=dilation)
+                     dilation=dilation, groups=groups)
     nn.init.kaiming_uniform_(conv.weight, a=0.0003)
     nn.init.zeros_(conv.bias)
     return conv
