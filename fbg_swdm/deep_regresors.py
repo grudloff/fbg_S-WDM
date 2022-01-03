@@ -6,6 +6,7 @@ from torch.optim import Adam, SGD, AdamW
 from torch.optim.lr_scheduler import OneCycleLR, ReduceLROnPlateau
 import torch
 from torch import Tensor
+from torch.nn.utils.parametrize import register_parametrization
 import pytorch_lightning as pl
 import numpy as np
 from random import uniform
