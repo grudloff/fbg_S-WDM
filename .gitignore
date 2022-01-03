@@ -8,3 +8,6 @@
 /fbg_swdm/__pycache__
 *.sqlite3
 *.pkl
+*.npy
+*.ipynb
+*.ckpt
