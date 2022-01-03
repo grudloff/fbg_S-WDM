@@ -87,7 +87,17 @@ def kurtosis(input: Tensor) -> Tensor:
 
 @torch.jit.script
 def l1_norm(input: Tensor) -> Tensor:
-    return torch.norm(input, 1)
+
+@torch.jit.script
+def roughness(input: Tensor) -> Tensor:
+    """Measure of roughness"""
+    input = input.squeeze()
+    input = input.T
+    zeros = torch.zeros(1, input.size(1), device=input.device)
+    diff  = torch.diff(input, prepend=zeros, append=zeros, dim=0)
+    norm_diff = (diff - diff.mean(dim=0))/diff.std(dim=0, unbiased=True)
+    roughness = norm_diff.diff(dim=0)**2
+    return roughness.mean()
 
 # -------------------------------- Model Utils ------------------------------- #
 
