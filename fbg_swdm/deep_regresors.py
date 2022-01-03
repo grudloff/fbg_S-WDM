@@ -529,20 +529,21 @@ class base_model(pl.LightningModule):
         return self._prep_dataloader((X, y))
 
     def configure_optimizers(self):
+        params = filter(lambda p: p.requires_grad, self.parameters())
         if self.optimizer == 'adam':
-            optimizer = Adam(self.parameters(), lr=self.hparams.lr,
+            optimizer = Adam(params, lr=self.hparams.lr,
                              weight_decay=self.hparams.weight_decay,
                              **self.optimizer_kwargs)
         elif self.optimizer == 'sgd':
-            optimizer = SGD(self.parameters(), lr=self.hparams.lr,
+            optimizer = SGD(params, lr=self.hparams.lr,
                             weight_decay=self.hparams.weight_decay, 
                             **self.optimizer_kwargs)
         elif self.optimizer == 'adamw':
-            optimizer = AdamW(self.parameters(), lr=self.hparams.lr, 
+            optimizer = AdamW(params, lr=self.hparams.lr, 
                               weight_decay=self.hparams.weight_decay,
                               **self.optimizer_kwargs)
         elif issubclass(self.optimizer, torch.optim.Optimizer):
-            optimizer = self.optimizer(self.parameters(), lr=self.hparams.lr, 
+            optimizer = self.optimizer(params, lr=self.hparams.lr, 
                               weight_decay=self.hparams.weight_decay,
                               **self.optimizer_kwargs)
         else:
@@ -706,5 +707,5 @@ class autoencoder_model(encoder_model):
         self.log('hp/l2', self.l2(outputs, targets))
 
     def predict(self, X):
-        X = self.prep_dataloader((X,))
+        X = self._prep_dataloader((X,))
         return np.concatenate([self(x[0])[1].detach().cpu().numpy() for x in X])
