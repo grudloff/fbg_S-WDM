@@ -653,9 +653,9 @@ class encoder_model(base_model):
 
 
 class autoencoder_model(encoder_model):
-    def __init__(self, gamma=1e-3, *args, **kwargs):
+    def __init__(self, gamma=1e-3, smooth_reg=1e-6, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.save_hyperparameters('gamma', logger=False)
+        self.save_hyperparameters('gamma', 'smooth_reg', logger=False)
 
         self.decoder = decoder()
 
@@ -686,7 +686,9 @@ class autoencoder_model(encoder_model):
 
         loss = (1-self.hparams.gamma)*reg_loss \
                + self.hparams.gamma*rec_loss \
-               + self.hparams.reg*self.reg_func(latent)
+               + self.hparams.reg*self.reg_func(latent) \
+               + self.hparams.smooth_reg* \
+                 roughness(self.decoder.transpose_conv.weight)
         return loss
 
     def rec_loss(self, outputs, targets):
