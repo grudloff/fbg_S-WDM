@@ -443,7 +443,7 @@ class base_model(pl.LightningModule):
 
         if data is None:
             data = sim.gen_data()
-            self.data=sim.normalize(*data)
+            self.data = sim.normalize(*data)
         else:
             self.data = data
         
@@ -513,7 +513,7 @@ class base_model(pl.LightningModule):
         items.pop("loss", None)
         return items
 
-    def prep_dataloader(self, Z, shuffle=False):
+    def _prep_dataloader(self, Z, shuffle=False):
         Z = map(lambda x: tensor(x, dtype=torch.get_default_dtype(), 
                                  device=self.device),
                    Z)
@@ -522,11 +522,11 @@ class base_model(pl.LightningModule):
 
     def train_dataloader(self):
         X, y = self.data[0:2]
-        return self.prep_dataloader((X, y), shuffle=True)
+        return self._prep_dataloader((X, y), shuffle=True)
 
     def val_dataloader(self):
         X, y = self.data[2:]
-        return self.prep_dataloader((X, y))
+        return self._prep_dataloader((X, y))
 
     def configure_optimizers(self):
         if self.optimizer == 'adam':
