@@ -222,8 +222,9 @@ class dense_encoder(nn.Module):
         nn.init.zeros_(conv.bias)
 
         #output linear transform params
-        weights = linspace(-1, 1, vars.N)
-        self.output_linear = nn.Parameter(weights, requires_grad=False)
+        output_linear = linspace(-1, 1, vars.N)
+        self.register_buffer("output_linear", output_linear)
+        
 
     def forward(self, x):
         #add channel dimension
