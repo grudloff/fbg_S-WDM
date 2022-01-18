@@ -638,7 +638,7 @@ class base_model(pl.LightningModule):
             return optimizer
 
     def predict(self, X):
-        X = self.prep_dataloader((X,))
+        X = self._prep_dataloader((X,))
         return np.concatenate([self(x[0])[0].detach().cpu().numpy() for x in X])
 
 
