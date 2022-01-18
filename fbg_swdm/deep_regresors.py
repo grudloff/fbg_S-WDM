@@ -68,8 +68,16 @@ def kl_div(rho):
     return func
 
 @torch.jit.script
-def spread(input: Tensor) -> Tensor:
-    #
+def roughness(input: Tensor) -> Tensor:
+    """Measure of roughness"""
+    shape = input.size()
+    shape[-1] = 1
+    zeros = torch.zeros(shape, device=input.device)
+    diff  = torch.diff(input, prepend=zeros, append=zeros, dim=-1)
+    norm_diff = (diff - diff.mean(dim=0))/diff.std(dim=0, unbiased=True)
+    roughness = norm_diff.diff(dim=0)**2
+    return roughness.mean()
+
     # input: B, C, W tensor
     x = torch.arange(input.size(-1), device = input.device)
     mean = torch.sum(x*input, dim=-1, keepdim=True)
