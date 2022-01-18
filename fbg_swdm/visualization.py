@@ -45,7 +45,7 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
     x, y = _gen_sweep(**kwargs)
 
     if norm:
-        x, = normalize(x)
+        x = normalize(x)
         y_hat = model.predict(x)
         x, y_hat = denormalize(x, y_hat)
     else:
@@ -113,7 +113,7 @@ def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
         x, y = _gen_sweep(noise=noise, **kwargs)
 
         if norm:
-            x, = normalize(x)
+            x = normalize(x)
             y_hat = model.predict(x)
             x, y_hat = denormalize(x, y_hat)
         else:

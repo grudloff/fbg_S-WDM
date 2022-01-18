@@ -295,6 +295,12 @@ def plot_freq_dist(X_train, y_train, X_test, y_test):
     plt.legend()
 
 
+# ---------------------------------------------------------------------------- #
+#                      Normalizations and Denormalization                      #
+# ---------------------------------------------------------------------------- #
+
+
+@listify
 def normalize(X=None, y=None, *args):
     if X is not None:
         max = np.max(vars.A*get_max_R(vars.S))
@@ -308,7 +314,7 @@ def normalize(X=None, y=None, *args):
     if args:
         yield from normalize(*args)
 
-
+@listify
 def denormalize(X=None, y=None, *args):
     if X is not None:
         max = np.max(vars.A*get_max_R(vars.S))
