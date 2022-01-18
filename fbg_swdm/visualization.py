@@ -74,36 +74,36 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")
 
-def check_latent(model, K=10,  **kwargs):
+def check_latent(model, model_type='encoder', K=10,  **kwargs):
 
     x, y = _gen_sweep(**kwargs)
 
-    y = (y - vars.λ0)/vars.Δ
+    x, y = normalize(x, y)
     input = torch.tensor(x, dtype=torch.get_default_dtype(), device=model.device)
     
-    x = x/np.sum(vars.A)  # scale input
+    if model_type == 'encoder':
     y_hat, latent = model(input)
-    y_hat = vars.λ0+vars.Δ*y_hat
-    x = x*np.sum(vars.A)
+    elif model_type == 'autoencoder':
+        x_hat, y_hat, latent = model(input)
+    else:
+        raise ValueError("model_type should be {'encoder','autoencoder'}")
+    y_hat = denormalize(y=y_hat)
+    y = denormalize(y=y)
     y_hat = y_hat.detach().cpu().numpy()
 
-    AE = np.abs(y-y_hat)
-    AE = np.sum(AE, axis=1)/vars.p
-    top_n = AE.argsort()[-K:][::-1]
+    MAE = np.sum(np.abs(y-y_hat), axis=1) # mean absolute error
+    top_n = MAE.argsort()[-K:][::-1]
 
-    for n in top_n:
-        test = x[n]
-        input = torch.tensor(test, dtype=torch.get_default_dtype(), device=model.device)
-        input = input.unsqueeze(0) # add batch dim
-        y_hat, latent = model(input)
-        y_hat = np.squeeze(y_hat.detach().cpu().numpy())
-        latent = latent.detach().cpu().numpy()
-        latent = latent.T
-        latent = np.squeeze(latent)
-        plt.figure()
-        plt.plot(test)
-        plt.plot(latent)
-        plt.title('y='+str(y[n])+' y_hat='+str(y_hat))
+    for i in top_n:
+        plt.figure(figsize=vars.figsize)
+        plt.title('y_hat='+str(y_hat[i]))
+        a1 = plt.gca()
+        a1.plot(vars.λ, x[i])
+        a2 = a1.twinx()
+        a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
+        a2.plot(vars.λ, latent[i].cpu().detach().numpy().T)
+        if model_type == 'autoencoder':
+            a1.plot(vars.λ, x_hat[i].cpu().detach(), linestyle='-')
 
 def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
     noise_vect = np.linspace(min_snr, max_snr, M)
@@ -121,6 +121,8 @@ def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
 
         error_vect[i] = np.mean(np.abs(y - y_hat))
     
+    error_vect /= vars.p # error in picometers
+    
     noise_vect = 10*np.log10(noise_vect)
     
     plt.figure(figsize=vars.figsize)
@@ -128,3 +130,4 @@ def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
     plt.ylabel('Mean Absolute_error [pm]')
     plt.xlabel('SNR [dB]')
     plt.plot(noise_vect, error_vect)
+    plt.yscale('log')
