@@ -525,8 +525,6 @@ class base_model(pl.LightningModule):
                 sigma = self.noise
             else:
                 sigma = 1e-2
-            sigma = sigma*torch.rand((x.size(0), 1), dtype=x.dtype,
-                                         layout=x.layout, device=x.device)
             noise = sigma*torch.randn_like(x)
             x += noise
         outputs = self.forward(x)
