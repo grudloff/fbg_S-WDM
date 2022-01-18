@@ -97,12 +97,16 @@ def spread(sigma):
     return func
 
 @torch.jit.script
-def kurtosis(input: Tensor) -> Tensor:
-    x = torch.arange(input.size(-1), device = input.device)
-    mean = torch.sum(x*input, dim=-1, keepdim=True)
-    dist_mean = x - mean
-    K = torch.sum(dist_mean**4*input, dim=-1)/torch.sum(dist_mean**2*input, dim=-1)**2
+def kurtosis_func(input: Tensor, kappa: float=10) -> Tensor:
+    mean_output = torch.mean(input, dim=-1, keepdim=True).detach()
+    std_output = torch.std(input, dim=-1, keepdim=True)
+    K = torch.mean((((input - mean_output) / std_output) ** 4), dim=-1)
     return -K.mean()
+
+def kurtosis(kappa):
+    def func(input):
+        return kurtosis_func(input, kappa)
+    return func
 
 @torch.jit.script
 def l1_norm(input: Tensor) -> Tensor:
@@ -655,9 +659,9 @@ class encoder_model(base_model):
         elif self.hparams.reg_type == 'kl_div':
             self.reg_func = kl_div(self.hparams.rho)
         elif self.hparams.reg_type == 'spread':
-            self.reg_func = spread
+            self.reg_func = spread(self.hparams.sigma)
         elif self.hparams.reg_type == 'kurtosis':
-            self.reg_func = kurtosis
+            self.reg_func = kurtosis(self.hparams.kappa)
         else:
             raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
 
