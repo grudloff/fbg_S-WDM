@@ -109,6 +109,23 @@ def kurtosis(kappa):
     return func
 
 @torch.jit.script
+def gaussianess_func(input: Tensor, nu: float=1e-2) -> Tensor:
+    length = input.size(-1)
+    x = torch.arange(length, device = input.device)/length
+    mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
+    dist_mean = x - mean
+    g = 1/(nu*torch.sqrt(2*vars.π))*torch.exp(-dist_mean**2/(2*nu**2))
+    g /= g.sum()
+    G = F.relu(input-g)
+    G = G**2
+    return G.mean()
+
+def gaussianess(nu):
+    def func(input):
+        return gaussianess_func(input, nu)
+    return func
+
+@torch.jit.script
 def l1_norm(input: Tensor) -> Tensor:
     return torch.norm(input, p=1, dim=-1).mean()
 
@@ -662,6 +679,8 @@ class encoder_model(base_model):
             self.reg_func = spread(self.hparams.sigma)
         elif self.hparams.reg_type == 'kurtosis':
             self.reg_func = kurtosis(self.hparams.kappa)
+        elif self.hparams.reg_type == 'gaussianess':
+            self.reg_func = gaussianess(self.hparams.nu)
         else:
             raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
 
