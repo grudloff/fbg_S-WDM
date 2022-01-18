@@ -78,13 +78,23 @@ def roughness(input: Tensor) -> Tensor:
     roughness = norm_diff.diff(dim=0)**2
     return roughness.mean()
 
+@torch.jit.script
+def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     # input: B, C, W tensor
-    x = torch.arange(input.size(-1), device = input.device)
-    mean = torch.sum(x*input, dim=-1, keepdim=True)
+    length = input.size(-1)
+    x = torch.arange(length, device = input.device)
+    mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = torch.abs(x - mean) # distance to mean
-    dist_mean = dist_mean.detach() #don't propagate gradient through here
-    spread = torch.sum(dist_mean*input**2, dim=-1)
+    dist_mean /= length//2 # normalize
+    spread = torch.mean(dist_mean*input**2, dim=-1)
+    weight = F.softplus(sigma-torch.max(input.detach(), dim=-1).values, beta=5)
+    spread = spread*weight[None,...]
     return spread.mean()
+
+def spread(sigma):
+    def func(input):
+        return spread_func(input, sigma)
+    return func
 
 @torch.jit.script
 def kurtosis(input: Tensor) -> Tensor:
