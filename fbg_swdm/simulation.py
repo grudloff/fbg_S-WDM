@@ -5,6 +5,29 @@ from numpy import log as ln
 from numpy import exp as exp
 import fbg_swdm.variables as vars
 from math import sqrt
+from functools import wraps
+
+
+# ---------------------------------------------------------------------------- #
+#                                  Decorators                                  #
+# ---------------------------------------------------------------------------- #
+
+
+def listify(func):
+    """decorator for making generator functions return a list instead"""
+    @wraps(func)
+    def new_func(*args, **kwargs):
+        output = list(func(*args, **kwargs))
+        if len(output)==1:
+            output = output[0]
+        return output
+
+    return new_func
+
+
+# ---------------------------------------------------------------------------- #
+#                                      asd                                     #
+# ---------------------------------------------------------------------------- #
 
 
 # reflection spectrum
