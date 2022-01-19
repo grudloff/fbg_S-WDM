@@ -82,7 +82,7 @@ def check_latent(model, model_type='encoder', K=10,  **kwargs):
     input = torch.tensor(x, dtype=torch.get_default_dtype(), device=model.device)
     
     if model_type == 'encoder':
-    y_hat, latent = model(input)
+        y_hat, latent = model(input)
     elif model_type == 'autoencoder':
         x_hat, y_hat, latent = model(input)
     else:
