@@ -231,6 +231,19 @@ def get_kernel_sizes(n_layers, target, verbose=False):
             best_receptive_field = receptive_field
             
 
+# ------------------------------- Augmentation ------------------------------- #
+
+@torch.jit.script
+def batch_shift(batch: Tuple[Tensor, Tensor], n: int) -> Tuple[Tensor, Tensor]:
+    """ Extend batch by concatenating n shifts around zero-shift"""
+    n += 1 #include zero-shift
+    x, y = batch 
+    shifts = torch.arange(n, device=x.device)-n//2
+    x = torch.cat([torch.roll(x, int(s)) if s else x for s in shifts], dim=0)
+    y = y[None, ...] + vars.Δ/vars.N*shifts[..., None, None] #add shift on first dimension
+    y = y.reshape(-1, y.size(-1)) # concat new dim along the first dimension
+    batch = x, y
+    return batch
 
 # ----------------------------- Parametrizations ----------------------------- #
     
@@ -893,6 +906,17 @@ class encoder_model(base_model):
         loss = self.reg_loss(y, y_hat)\
               + self.hparams.reg*self.reg_func(latent)
         return loss
+    
+    def batch_forward(self, X):
+        shape = X.shape
+        X = self._prep_dataloader((X,))
+        Y_hat = np.empty((shape[0], vars.Q))
+        L = np.empty((shape[0], vars.Q, shape[1]))
+        for i, x in enumerate(X):
+            y_hat, latent = self(x[0])
+            Y_hat[i*self.batch_size: (i+1)*self.batch_size] = y_hat.detach().cpu().numpy()
+            L[i*self.batch_size: (i+1)*self.batch_size] = latent.detach().cpu().numpy()
+        return Y_hat, L
 
 
 class autoencoder_model(encoder_model):
@@ -966,3 +990,16 @@ class autoencoder_model(encoder_model):
     def predict(self, X):
         X = self._prep_dataloader((X,))
         return np.concatenate([self(x[0])[1].detach().cpu().numpy() for x in X])
+    
+    def batch_forward(self, X):
+        shape = X.shape
+        X = self._prep_dataloader((X,))
+        X_hat = np.empty(shape)
+        Y_hat = np.empty((shape[0], vars.Q))
+        L = np.empty((shape[0], vars.Q, shape[1]))
+        for i, x in enumerate(X):
+            x_hat, y_hat, latent = self(x[0])
+            X_hat[i*self.batch_size: (i+1)*self.batch_size] = x_hat.detach().cpu().numpy()
+            Y_hat[i*self.batch_size: (i+1)*self.batch_size] = y_hat.detach().cpu().numpy()
+            L[i*self.batch_size: (i+1)*self.batch_size] = latent.detach().cpu().numpy()
+        return X_hat, Y_hat, L
