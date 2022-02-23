@@ -109,10 +109,10 @@ def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     x = torch.arange(length, device = input.device)
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = torch.abs(x - mean) # distance to mean
-    dist_mean /= length//2 # normalize
     spread = torch.mean(dist_mean*input**2, dim=-1)
-    weight = F.softplus(sigma-torch.max(input.detach(), dim=-1).values, beta=5)
-    spread = spread*weight[None,...]
+    std = torch.sqrt(torch.mean(dist_mean**2*input, dim=-1))
+    weight = F.relu(std-sigma)
+    spread = spread*weight[None, ...]
     return spread.mean()
 
 def spread(sigma):
