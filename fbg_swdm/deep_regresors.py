@@ -225,14 +225,119 @@ def get_kernel_sizes(n_layers, target, verbose=False):
             best_kernel_vect = kernel_vect.copy()
             best_receptive_field = receptive_field
             
-        change_idx += 1
-        if change_idx == stop:
-            change_idx = 1
+
+
+# ----------------------------- Parametrizations ----------------------------- #
     
-    if verbose:
-        print('kernel_vect: ', best_kernel_vect)
-        print('receptive_field: ', best_receptive_field)
-    return best_kernel_vect
+
+class SigmoidStraightThrough(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, u):
+        return sigmoid(u)
+
+    @staticmethod
+    def backward(ctx, dx):
+        return dx
+def sigmoid_straight_through(u):
+    return SigmoidStraightThrough.apply(u)
+
+class Symmetric(nn.Module):
+    """Reparametrize a vector to a symmetrical one by concatenating a reflexion"""
+    def __init__(self, kernel_size):
+        super().__init__()
+        self.N = kernel_size//2+1
+    
+    def forward(self, X):
+        return torch.cat((X, X[..., :-1].flip(-1)), dim=-1)
+    
+    def right_inverse(self, Z):
+        return Z[...,:self.N]
+
+class UnitCap(nn.Module):
+    """Reparametrize a variable to be bounded in [0, 1] with a sigmoid function 
+       using the natural gradient"""
+    def forward(self, X):
+        return sigmoid_straight_through(X)
+    def right_inverse(self, Z):
+        return torch.logit(Z, eps=1e-6) #needs bound otherwise inf
+
+class Clamp(nn.Module):
+    """Reparametrize a variable to be bounded in [0, 1] with a clamp"""
+    def forward(self, X):
+        return X.clamp(0, 1)
+    def right_inverse(self, Z):
+        return Z
+
+class ChannelSame(nn.Module):
+    """Reparametrize convolution weight to repeat same kernel for every channel"""
+    def __init__(self, Q):
+        super().__init__()
+        self.Q = Q
+    def forward(self, X):
+        return X.expand((self.Q, -1, -1))
+    def right_inverse(self, Z):
+        return Z[:1]
+
+class ChannelSameBias(nn.Module):
+    """Reparametrize convolution bias to repeat same kernel for every channel"""
+    def __init__(self, Q):
+        super().__init__()
+        self.Q = Q
+    def forward(self, X):
+        return X.expand(self.Q)
+    def right_inverse(self, Z):
+        return Z[:1]
+
+
+class NormConvTranspose1d(nn.ConvTranspose1d):
+    def __init__(self, in_channels, out_channels, kernel_size, padding, groups,
+                 bias=False):
+        super().__init__(in_channels, out_channels, kernel_size, 
+                         padding=padding, groups=groups, bias=bias)
+        parametrize.register_parametrization(self, "weight", UnitCap())
+
+class SymmetricNormConvTranspose1d(nn.ConvTranspose1d):
+    def __init__(self, in_channels, out_channels, kernel_size, padding, groups,
+                 bias=False):
+        super().__init__(in_channels, out_channels, kernel_size, 
+                         padding=padding, groups=groups, bias=bias)
+        # TODO: replace this for more elegant getattr and setattr in Symmetric
+        with torch.no_grad():
+            self.weight.data = self.weight.data[..., :kernel_size//2 + 1] # chop kernel dim
+        # parametrize.register_parametrization(self, "weight", Clamp())
+        parametrize.register_parametrization(self, "weight", UnitCap())
+        parametrize.register_parametrization(self, "weight", Symmetric(kernel_size), unsafe=True)
+        
+class SymmetricConv1d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, groups,
+                 bias=True):
+        super().__init__()
+        kernel_size = kernel_size//2 + 1
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, 
+                         padding='same', groups=groups, bias=bias)
+        nn.init.kaiming_uniform_(self.conv.weight, nonlinearity='linear')
+        parametrize.register_parametrization(self.conv, "weight", Symmetric(), unsafe=True)
+    def forward(self, input):
+        return self.conv(input)
+
+class NarrowConv1D(nn.Conv1d):
+    def __init__(self, in_channels, out_channels, kernel_size, groups,
+                 bias=False):
+        super().__init__(in_channels, out_channels, kernel_size, 
+                         padding='same', bias=bias, groups=groups)
+        with torch.no_grad():
+            if bias:
+                self.bias.data = self.bias.data[:1]
+            self.weight.data = self.weight.data[:1] # chop channel dim
+            self.weight.data = self.weight.data[..., :kernel_size//2 + 1] # chop kernel dim
+        nn.init.dirac_(self.weight) # Init to identity
+        parametrize.register_parametrization(self, "weight", ChannelSame(in_channels), unsafe=True)
+        if bias:
+            parametrize.register_parametrization(self, "bias", ChannelSameBias(in_channels), unsafe=True)
+        parametrize.register_parametrization(self, "weight", Symmetric(kernel_size), unsafe=True)
+
+
 
 # ---------------------------------------------------------------------------- #
 #                                 Torch Models                                 #
