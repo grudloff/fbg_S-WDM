@@ -90,12 +90,13 @@ def kl_div(rho):
 @torch.jit.script
 def roughness(input: Tensor) -> Tensor:
     """Measure of roughness"""
-    shape = input.size()
+    shape = input.size() # B C W
     shape[-1] = 1
     zeros = torch.zeros(shape, device=input.device)
-    diff  = torch.diff(input, prepend=zeros, append=zeros, dim=-1)
-    norm_diff = (diff - diff.mean(dim=0))/diff.std(dim=0, unbiased=True)
-    roughness = norm_diff.diff(dim=0)**2
+    diff  = torch.diff(input, prepend=zeros, append=zeros,)
+    norm_diff = (diff - diff.mean(dim=-1).detach()) \
+                /diff.std(dim=-1, unbiased=True).detach()
+    roughness = norm_diff.diff()**2
     return roughness.mean()
 
 def null(*vars, **kwargs):
@@ -151,17 +152,6 @@ def gaussianess(nu):
 @torch.jit.script
 def l1_norm(input: Tensor) -> Tensor:
     return torch.norm(input, p=1, dim=-1).mean()
-
-@torch.jit.script
-def roughness(input: Tensor) -> Tensor:
-    """Measure of roughness"""
-    input = input.squeeze()
-    input = input.T
-    zeros = torch.zeros(1, input.size(1), device=input.device)
-    diff  = torch.diff(input, prepend=zeros, append=zeros, dim=0)
-    norm_diff = (diff - diff.mean(dim=0))/diff.std(dim=0, unbiased=True)
-    roughness = norm_diff.diff(dim=0)**2
-    return roughness.mean()
 
 # -------------------------------- Model Utils ------------------------------- #
 
