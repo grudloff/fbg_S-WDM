@@ -834,7 +834,7 @@ class encoder_model(base_model):
     def __init__(self, reg=1e-5,
                  rho=1e-1, num_layers=3, num_head_layers=2,
                  encoder_type = 'dense', encoder_kwargs={}, reg_type='l1',
-                 **kwargs):
+                 prefilter=False, **kwargs):
         super().__init__(reg=reg, rho=rho, num_layers=num_layers,
                          num_head_layers=num_head_layers, 
                          encoder_type=encoder_type,
