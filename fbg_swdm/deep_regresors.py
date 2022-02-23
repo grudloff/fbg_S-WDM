@@ -98,6 +98,9 @@ def roughness(input: Tensor) -> Tensor:
     roughness = norm_diff.diff(dim=0)**2
     return roughness.mean()
 
+def null(*vars, **kwargs):
+    return 0
+
 @torch.jit.script
 def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     # input: B, C, W tensor
