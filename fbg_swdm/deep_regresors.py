@@ -1,15 +1,16 @@
 
-from torch import nn, cat, linspace, tensor
+from torch import nn, cat, linspace, tensor, sigmoid
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.optim import Adam, SGD, AdamW
 from torch.optim.lr_scheduler import OneCycleLR, ReduceLROnPlateau
 import torch
 from torch import Tensor
-from torch.nn.utils.parametrize import register_parametrization
+import torch.nn.utils.parametrize as parametrize
 import pytorch_lightning as pl
 import numpy as np
 from random import uniform
+from typing import Tuple
 from torchaudio.functional import lowpass_biquad
 
 import fbg_swdm.simulation as sim
