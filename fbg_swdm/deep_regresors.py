@@ -779,9 +779,12 @@ class base_model(pl.LightningModule):
             #return optimizer
         elif self.scheduler == 'one_cycle':
             # default kwargs
-            scheduler_kwargs = dict(div_factor=1, final_div_factor=1e2,
-                        cycle_momentum=True,
-                        anneal_strategy='cos', three_phase=True)
+            scheduler_kwargs = dict(div_factor=1e2, final_div_factor=1e3,
+                                    cycle_momentum=True,
+                                    anneal_strategy='cos', three_phase=False)
+            if self.trainer:
+                total_steps = self.trainer.max_epochs*vars.M//self.batch_size
+                scheduler_kwargs['total_steps'] = total_steps
             scheduler_kwargs.update(self.scheduler_kwargs)
             scheduler = OneCycleLR(optimizer, 
                                    max_lr=[param_group['lr'] \
