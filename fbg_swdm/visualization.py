@@ -74,7 +74,8 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")
 
-def check_latent(model, model_type='encoder', K=10,  **kwargs):
+def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
+
 
     x, y = _gen_sweep(**kwargs)
 
@@ -89,7 +90,30 @@ def check_latent(model, model_type='encoder', K=10,  **kwargs):
         raise ValueError("model_type should be {'encoder','autoencoder'}")
     y_hat = denormalize(y=y_hat)
     y = denormalize(y=y)
-    y_hat = y_hat.detach().cpu().numpy()
+    
+
+    if add_center:
+        i = len(y_hat)//2
+        plt.figure(figsize=vars.figsize)
+        plt.title('y_hat='+str(y_hat[i]))
+        a1 = plt.gca()
+        a1.plot(vars.λ, x[i])
+        a2 = a1.twinx()
+        a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
+        a2.plot(vars.λ, latent[i].T)
+        if autoencoder:
+            a1.plot(vars.λ, x_hat[i], linestyle='-')
+    if add_border:
+        for i in [0, len(y_hat)-1]:
+            plt.figure(figsize=vars.figsize)
+            plt.title('y_hat='+str(y_hat[i]))
+            a1 = plt.gca()
+            a1.plot(vars.λ, x[i])
+            a2 = a1.twinx()
+            a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
+            a2.plot(vars.λ, latent[i].T)
+            if autoencoder:
+                a1.plot(vars.λ, x_hat[i], linestyle='-')
 
     MAE = np.sum(np.abs(y-y_hat), axis=1) # mean absolute error
     top_n = MAE.argsort()[-K:][::-1]
