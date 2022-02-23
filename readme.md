@@ -69,17 +69,17 @@ y_test_hat = alg.predict(X_test)
 ## Used Repositories
 
 [1] Least Squares Support Vector Regression
-    https://github.com/zealberth/lssvr
+https://github.com/zealberth/lssvr
 
 [2]LEAP: Evolutionary Algorithms in Python
     Written by Dr. Jeffrey K. Bassett, Dr. Mark Coletti, and Eric Scott
     https://github.com/AureumChaos/LEAP
 
 [3] Scikit-Learn: Machine Learning in {P}ython
-    https://github.com/scikit-learn/scikit-learn
+https://github.com/scikit-learn/scikit-learn
 
 [4] Array programming with {NumPy}
-    https://github.com/numpy/numpy
+https://github.com/numpy/numpy
 
 ## Papers 
 
