@@ -137,10 +137,10 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
         if autoencoder:
             a1.plot(vars.λ, x_hat[i], linestyle='-')
 
-def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
-    noise_vect = np.linspace(min_snr, max_snr, M)
+def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
+    db_vect = np.linspace(min_snr, max_snr, M)
     error_vect = np.empty(M)
-    noise_vect = 10.0**(noise_vect/10.0)
+    noise_vect = 10.0**(-db_vect/10.0)*denormalize(1)
     for i, noise in enumerate(noise_vect):
         x, y = _gen_sweep(noise=noise, **kwargs)
 
@@ -153,13 +153,11 @@ def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
 
         error_vect[i] = np.mean(np.abs(y - y_hat))
     
-    error_vect /= vars.p # error in picometers
-    
-    noise_vect = 10*np.log10(noise_vect)
+    error_vect /= vars.p # to pm
     
     plt.figure(figsize=vars.figsize)
     plt.title('Mean Absolute error vs SNR')
     plt.ylabel('Mean Absolute_error [pm]')
     plt.xlabel('SNR [dB]')
-    plt.plot(noise_vect, error_vect)
+    plt.plot(db_vect, error_vect)
     plt.yscale('log')
