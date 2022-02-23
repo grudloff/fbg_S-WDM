@@ -1,8 +1,6 @@
 /.ipynb_checkpoints
 /.vscode
-/FBG_simulations-Copy1.ipynb
-/FBG_simulations.ipynb
-/FBG_simulations_moni.ipynb
+/old_notebooks
 /lssvr.py
 /test.py
 /fbg_swdm/__pycache__
@@ -11,3 +9,4 @@
 *.npy
 *.ipynb
 *.ckpt
+*.p
