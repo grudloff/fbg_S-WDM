@@ -192,13 +192,10 @@ def get_kernel_sizes(n_layers, target, verbose=False):
     kernel_vect = [3]*n_layers
 
     #increase first kernel until receptive_field is surpassed
-    while True:
-        receptive_field = test_kernel(kernel_vect)
-        
-        if receptive_field > target:
-            break
-        else:
-            kernel_vect[0] = (kernel_vect[0]+1)*2 -1
+    while test_kernel(kernel_vect) < target:
+        kernel_vect[0] = (kernel_vect[0]+1)*2 -1
+
+    receptive_field = test_kernel(kernel_vect)
     if verbose:
         print('kernel_vect: ', kernel_vect)
         print('receptive_field: ', receptive_field)
@@ -210,26 +207,28 @@ def get_kernel_sizes(n_layers, target, verbose=False):
         return kernel_vect
 
     # Decrease first kernel by roughly 2e-1 times and compensate by
-    # incresing by two the following kernels to get a receptive_field
+    # incresing by 2 the following kernels to get a receptive_field
     # closer to the target
     best_kernel_vect = kernel_vect.copy()
     best_receptive_field = receptive_field
-    
-    change_idx = 1
-    stop = n_layers
+
     while True:
-        kernel_vect[0] = (kernel_vect[0]+1)//2 -1
-        kernel_vect[change_idx] += 2
-        receptive_field = test_kernel(kernel_vect)
-        if verbose:
-            print('kernel_vect: ', kernel_vect)
-            print('receptive_field: ', receptive_field)
-        if kernel_vect[0]<7 or kernel_vect[0]<kernel_vect[1]:
-            break
-        if abs(receptive_field-target)<abs(best_receptive_field-target):
-            best_kernel_vect = kernel_vect.copy()
-            best_receptive_field = receptive_field
-            
+        for change_idx in range(1, n_layers):
+            kernel_vect[0] = (kernel_vect[0]+1)//2 -1
+            kernel_vect[change_idx] += 2
+            receptive_field = test_kernel(kernel_vect)
+            if verbose:
+                print('kernel_vect: ', kernel_vect)
+                print('receptive_field: ', receptive_field)
+            if kernel_vect[0]<7 or kernel_vect[0]<kernel_vect[1]:
+                if verbose:
+                    print('kernel_vect: ', best_kernel_vect)
+                    print('receptive_field: ', best_receptive_field)
+                return best_kernel_vect
+            if abs(receptive_field-target)<abs(best_receptive_field-target):
+                best_kernel_vect = kernel_vect.copy()
+                best_receptive_field = receptive_field
+
 
 # ------------------------------- Augmentation ------------------------------- #
 
