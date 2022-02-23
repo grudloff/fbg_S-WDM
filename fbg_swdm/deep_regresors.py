@@ -571,23 +571,56 @@ class decoder(nn.Module):
                                                  groups=out_channels)
         nn.init.kaiming_uniform_(self.transpose_conv.weight, nonlinearity='linear')
 
+        # joint spectra
+        if vars.topology.startswith('serial'):
+            # TODO: add warning if not serial_rec or serial??
+            # peak reflectance assigned to the last FBG (i=-1)
+            def func(x):
+                #change batch dim for channel dim
+                x = torch.transpose(x, 0, 1)
+
+                r = torch.zeros_like(x[0]) # reflectance
+                # t = torch.ones_like(x[0]) # transmittance
+                t_2 = torch.ones_like(x[0]) # transmittance squared
+                # traverse channel dims
+                for r_next, a in zip(x, self.A):
+                    t_next = 1 - r_next
+                    s = 1/(1 - a*r*r_next) # resonance
+                    # r = r + a*r_next*t**2*s
+                    # t = torch.sqrt(a)*t*t_next*s
+                    r = r + a*r_next*t_2*s
+                    t_2 = a*t_2*t_next**2*s**2
+                #normalize
+                # r = r/(x[-1].max().detach()*self.A.prod())
+                # peak = self.transpose_conv.weight[-1,0,vars.N//2].detach()
+                peak = self.transpose_conv.weight[-1, 0,vars.N//2]
+                r = r/(peak*self.A.prod())
+                return r
+            self.joint = func
+        elif vars.topology == 'parallel':
+            self.i = torch.argmax(sim.get_max_R(vars.S)*vars.A)
+            def func(x):
+                #change batch dim for channel dim
+                x = torch.transpose(x, 0, 1)
+                # tensor dot along channel dim
+                r = torch.tensordot(self.A, x, dims=1)
+                #normalize
+                r = r/(x[self.i].max().detach()*self.A[self.i])
+                return r
+            self.joint = func
+        else:
+            raise ValueError("Topology must be one of {'serial','parallel'}")
+
     def forward(self, x):
+
+        x = self.conv(x)
+        x = F.softmax(x, dim=-1)
+
         #output transposed conv
-        x = self.transpose_conv(x)
-        x = torch.transpose(x, 0, 1) #change batch dim for channel dim
+        with parametrize.cached(): # To compute parametrization once
+            x = self.transpose_conv(x)
+            x = self.joint(x)
 
-        r = torch.zeros_like(x[0])
-        t = torch.ones_like(x[0])
-        # traverse channel dims
-        at = 1.0
-        for r_next, a in zip(x, self.A):
-            t_next = 1 - r_next
-            at = a/at
-            F = 1/(1 - at*r*r_next) # resonance
-            r = r + at*r_next*t**2*F
-            t = torch.sqrt(at)*t*t_next*F
-
-        x = r
         return x
         
 
