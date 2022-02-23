@@ -546,15 +546,20 @@ class dilated_encoder(nn.Module):
 class decoder(nn.Module):
     def __init__(self):
         super().__init__()
-        #output transposed conv
+
+        # Atenuations
         self.A = nn.Parameter(torch.ones(vars.Q))
+        parametrize.register_parametrization(self, "A", UnitCap())
+
+
+        # single spectra
         in_channels = vars.Q
         out_channels = vars.Q
         kernel_size = vars.N + 1
-        self.transpose_conv = nn.ConvTranspose1d(in_channels, out_channels,
+        self.transpose_conv = SymmetricNormConvTranspose1d(in_channels, out_channels,
                                                  kernel_size, bias=False,
                                                  padding=vars.N//2,
-                                                 groups=vars.Q)
+                                                 groups=out_channels)
         nn.init.kaiming_uniform_(self.transpose_conv.weight, nonlinearity='linear')
 
     def forward(self, x):
