@@ -668,6 +668,8 @@ class base_model(pl.LightningModule):
         self.shift_augment = shift_augment
         self.batch_size = self.hparams.batch_size
 
+        self.param_groups = None
+
         # get one batch from validation as an example 
         for batch in self.val_dataloader():
             x, y = batch
@@ -748,7 +750,10 @@ class base_model(pl.LightningModule):
         return self._prep_dataloader((X, y))
 
     def configure_optimizers(self):
-        params = filter(lambda p: p.requires_grad, self.parameters())
+        if self.param_groups is None:
+            params = filter(lambda p: p.requires_grad, self.parameters())
+        else:
+            params = self.param_groups
         if self.optimizer == 'adam':
             optimizer = Adam(params, lr=self.hparams.lr,
                              weight_decay=self.hparams.weight_decay,
@@ -778,7 +783,9 @@ class base_model(pl.LightningModule):
                         cycle_momentum=True,
                         anneal_strategy='cos', three_phase=True)
             scheduler_kwargs.update(self.scheduler_kwargs)
-            scheduler = OneCycleLR(optimizer, max_lr=self.hparams.lr, 
+            scheduler = OneCycleLR(optimizer, 
+                                   max_lr=[param_group['lr'] \
+                                           for param_group in optimizer.param_groups], 
                                    **scheduler_kwargs)
             scheduler = {"scheduler": scheduler, "interval" : "step" }
         elif issubclass(self.scheduler, torch.optim.lr_scheduler._LRScheduler):
