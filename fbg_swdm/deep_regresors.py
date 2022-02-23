@@ -224,6 +224,38 @@ def get_kernel_sizes(n_layers, target, verbose=False):
                 best_receptive_field = receptive_field
 
 
+# ------------------------------ Initialization ------------------------------ #
+
+def transpose_conv_init(model):
+    A_b = np.array([vars.λ0]*vars.Q)
+    λ = np.linspace(vars.λ0 - vars.Δ, vars.λ0 + vars.Δ, vars.N+1)
+    A=np.array([1, 1]) # no attenuation
+    Δλ=vars.Δλ
+    S=vars.S
+    A_b = A_b[:, None]
+    λ = λ[None, :]
+    A = A[:, None]
+    Δλ = Δλ[:, None]
+    S = S[:, None]
+    data = sim.R(λb=A_b, λ=λ, A=A, Δλ=Δλ, S=S)
+    data = data[:, None, :]
+    transpose_conv = model.decoder.transpose_conv
+    with torch.no_grad():
+        if transpose_conv.parametrizations:
+            transpose_conv.weight = tensor(data, dtype=model.dtype, device=model.device)
+        else:
+            transpose_conv.weight= nn.Parameter(tensor(data, dtype=model.dtype, device=model.device))
+
+def attenuation_init(model, A=None):
+    if not A:
+        A = vars.A
+    with torch.no_grad():
+        if model.decoder.parametrizations.A:
+            model.decoder.A = tensor(A, dtype=model.dtype, device=model.device)
+        else:
+            model.decoder.A = nn.Parameter(tensor(A, dtype=model.dtype, device=model.device))
+
+
 # ------------------------------- Augmentation ------------------------------- #
 
 @torch.jit.script
