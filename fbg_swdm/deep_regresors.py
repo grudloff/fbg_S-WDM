@@ -632,7 +632,7 @@ class base_model(pl.LightningModule):
     def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
-                 reduce_on_plateau=False, noise=False,
+                 reduce_on_plateau=False, noise=False, shift_augment = False,
                  encoder_kwargs={}, **kwargs):
         super().__init__()
         
@@ -665,11 +665,21 @@ class base_model(pl.LightningModule):
 
         self.noise = noise
 
+        self.shift_augment = shift_augment
+        self.batch_size = self.hparams.batch_size
+
         # get one batch from validation as an example 
         for batch in self.val_dataloader():
             x, y = batch
             self.example_input_array = x
             break
+
+    def setup(self, stage):
+        super().setup(stage)
+
+        self.batch_size = self.hparams.batch_size//(self.shift_augment+1)
+        if self.hparams.batch_size%(self.shift_augment+1):
+            raise ValueError("shift_augment+1 should be a factor of batch_size")
 
     def metric(self, outputs, targets):
         x, y = targets
@@ -694,6 +704,9 @@ class base_model(pl.LightningModule):
                 sigma = 1e-2
             noise = sigma*torch.randn_like(x)
             x += noise
+        if self.shift_augment:
+            train_batch = batch_shift((x, y), self.shift_augment)
+            x, y = train_batch
         outputs = self.forward(x)
         targets = train_batch
         loss = self.loss(outputs, targets)
@@ -724,7 +737,7 @@ class base_model(pl.LightningModule):
                                  device=self.device),
                    Z)
         ds = TensorDataset(*Z)
-        return DataLoader(ds, self.hparams.batch_size, shuffle)
+        return DataLoader(ds, self.batch_size, shuffle)
 
     def train_dataloader(self):
         X, y = self.data[0:2]
