@@ -16,6 +16,20 @@ import fbg_swdm.variables as vars
 
 # ---------------------------- Model Loading Utils --------------------------- #
 
+def param_to_buffer(module, name, param): 
+    """Turns a parameter into a buffer"""
+    delattr(module, name) # Unregister parameter
+    module.register_buffer(name, param)
+
+def params_to_buffers(module):
+    """Turns all parameters of a module into buffers."""
+    modules = module.modules()
+    module = next(modules)
+    for name, param in module.named_parameters(recurse=False):
+        param_to_buffer(module, name, param)
+    for module in modules:
+        params_to_buffers(module)
+
 def convert_state_dict(state_dict, name):
     new_state_dict = dict()
     for k, v in state_dict.items():
