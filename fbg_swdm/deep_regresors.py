@@ -924,11 +924,13 @@ class autoencoder_model(encoder_model):
             self.reg_loss = null
 
     def metric(self, outputs, targets):
+        """Mean Absolute Value in picometers"""
         x, y = targets
         x_hat, y_hat, latent = outputs
         return F.l1_loss(y, y_hat)*vars.Δ/vars.p
 
     def l2(self, outputs, targets):
+        """l2-norm of latent variable"""
         x, y = targets
         x_hat, y_hat, latent  = outputs
         return torch.norm(latent, p=2, dim=-1).mean()
