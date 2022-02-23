@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
 from fbg_swdm.simulation import X, normalize, denormalize
+from fbg_swdm.deep_regresors import autoencoder_model
 
 import torch
 
@@ -32,6 +33,7 @@ def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
 
     # broadcast shape: N, M, FBGN
     x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
+
     if noise:
         x += np.random.randn(*x.shape)*noise
     return x, y 
@@ -44,10 +46,17 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
 
     x, y = _gen_sweep(**kwargs)
 
+    autoencoder = isinstance(model, autoencoder_model)
+
     if norm:
         x = normalize(x)
-        y_hat = model.predict(x)
-        x, y_hat = denormalize(x, y_hat)
+        if autoencoder and rec_error:
+            x_hat, y_hat, _ = model.batch_forward(x)
+            x, y_hat = denormalize(x, y_hat)
+            x_hat = denormalize(x_hat)
+        else:   
+            y_hat = model.predict(x)
+            x, y_hat = denormalize(x, y_hat)
     else:
         y_hat = model.predict(x)
 
@@ -68,26 +77,25 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
     fig.legend(labels=("FBG1", "FBG2", "Absolute Error"))
 
     if rec_error:
+        if not autoencoder:
+            x_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
         plt.figure(figsize=figsize)
-        X_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
-        plt.plot(y[:, n_sweep]/n, np.sum(np.abs(x - X_hat), axis=1))
+        plt.plot(y[:, n_sweep]/n, np.sum(np.abs(x - x_hat), axis=1))
         plt.xlabel("$\lambda_{B_2}$ [nm]")
         plt.ylabel("$Reconstruction Error$")
 
 def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
+    autoencoder = isinstance(model, autoencoder_model)
 
     x, y = _gen_sweep(**kwargs)
 
     x, y = normalize(x, y)
-    input = torch.tensor(x, dtype=torch.get_default_dtype(), device=model.device)
-    
-    if model_type == 'encoder':
-        y_hat, latent = model(input)
-    elif model_type == 'autoencoder':
-        x_hat, y_hat, latent = model(input)
+    if autoencoder:
+        x_hat, y_hat, latent = model.batch_forward(x)
     else:
-        raise ValueError("model_type should be {'encoder','autoencoder'}")
+        y_hat, latent = model.batch_forward(x)
+    
     y_hat = denormalize(y=y_hat)
     y = denormalize(y=y)
     
@@ -125,9 +133,9 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
         a1.plot(vars.λ, x[i])
         a2 = a1.twinx()
         a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
-        a2.plot(vars.λ, latent[i].cpu().detach().numpy().T)
-        if model_type == 'autoencoder':
-            a1.plot(vars.λ, x_hat[i].cpu().detach(), linestyle='-')
+        a2.plot(vars.λ, latent[i].T)
+        if autoencoder:
+            a1.plot(vars.λ, x_hat[i], linestyle='-')
 
 def error_snr(model, norm=True, min_snr=-60, max_snr = -10, M=10, **kwargs):
     noise_vect = np.linspace(min_snr, max_snr, M)
