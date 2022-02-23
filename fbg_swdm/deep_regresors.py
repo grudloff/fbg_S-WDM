@@ -10,6 +10,7 @@ from torch.nn.utils.parametrize import register_parametrization
 import pytorch_lightning as pl
 import numpy as np
 from random import uniform
+from torchaudio.functional import lowpass_biquad
 
 import fbg_swdm.simulation as sim
 import fbg_swdm.variables as vars
@@ -677,7 +678,11 @@ class encoder_model(base_model):
             raise ValueError("encoder_type must be {'dense','residual', 'dilated'} or a subclass of nn.Module")
         self.encoder = encoder(num_layers, num_head_layers, **encoder_kwargs)
 
+        self.filter = prefilter
+
     def forward(self, x):
+        if self.filter:
+            x = lowpass_biquad(x, sample_rate=1, cutoff_freq=0.2)
         return self.encoder(x)
 
     def setup(self, stage):
