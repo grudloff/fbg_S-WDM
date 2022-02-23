@@ -60,12 +60,17 @@ def load_old_model(model_class, checkpoint_path, add_hparams):
 # ---------------------------------- Losses ---------------------------------- #
     
 @torch.jit.script
-def weighted_mse(weights, y, y_hat):
+def weighted_mse_func(weights, y, y_hat):
     # weighted regression loss
     reg_loss = torch.dot(weights,torch.mean(F.mse_loss(y_hat, y, 
                                                             reduction='none'), 
                                             dim=0))
     return reg_loss
+
+def weighted_mse(weights):
+    def func(y, y_hat):
+        return weighted_mse_func(weights, y, y_hat)
+    return func
 
 # ------------------------------- Regularizers ------------------------------- #
         
@@ -862,28 +867,31 @@ class encoder_model(base_model):
 
     def setup(self, stage):
         super().setup(stage)
-    
-        if self.hparams.reg_type == 'l1':
-            self.reg_func = l1_norm
-        elif self.hparams.reg_type == 'kl_div':
-            self.reg_func = kl_div(self.hparams.rho)
-        elif self.hparams.reg_type == 'spread':
-            self.reg_func = spread(self.hparams.sigma)
-        elif self.hparams.reg_type == 'kurtosis':
-            self.reg_func = kurtosis(self.hparams.kappa)
-        elif self.hparams.reg_type == 'gaussianess':
-            self.reg_func = gaussianess(self.hparams.nu)
+        
+        if self.hparams.reg_type == None or self.hparams.reg == 0:
+            self.reg_func = null
         else:
-            raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
+            if self.hparams.reg_type == 'l1':
+                self.reg_func = l1_norm
+            elif self.hparams.reg_type == 'kl_div':
+                self.reg_func = kl_div(self.hparams.rho)
+            elif self.hparams.reg_type == 'spread':
+                self.reg_func = spread(self.hparams.sigma)
+            elif self.hparams.reg_type == 'kurtosis':
+                self.reg_func = kurtosis(self.hparams.kappa)
+            elif self.hparams.reg_type == 'gaussianess':
+                self.reg_func = gaussianess(self.hparams.nu)
+            else:
+                raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
+
+        self.reg_loss = weighted_mse(self.weights)
 
     def loss(self, outputs, targets):
         x, y = targets
         y_hat, latent = outputs
 
-        # weighted regression loss
-        reg_loss = weighted_mse(self.weights, y, y_hat)
-
-        loss = reg_loss + self.hparams.reg*self.reg_func(latent)
+        loss = self.reg_loss(y, y_hat)\
+              + self.hparams.reg*self.reg_func(latent)
         return loss
 
 
@@ -899,6 +907,22 @@ class autoencoder_model(encoder_model):
         x = self.decoder(latent)
         return x, y, latent
 
+    def setup(self, stage=0):
+        super().setup(stage)
+
+        if self.hparams.smooth_reg == 0:
+            self.roughness = null
+        else:
+            self.roughness = roughness
+
+        self.reg_loss = weighted_mse(self.weights)
+        self.rec_loss = F.mse_loss
+
+        if self.hparams.gamma == 0:
+            self.rec_loss = null
+        elif self.hparams.gamma == 1:
+            self.reg_loss = null
+
     def metric(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
@@ -912,21 +936,15 @@ class autoencoder_model(encoder_model):
     def loss(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
-
-        # weighted regression loss
-        reg_loss = weighted_mse(self.weights, y, y_hat)
-
-        # reconstruction loss
-        rec_loss = F.mse_loss(x_hat, x)
-
-        loss = (1-self.hparams.gamma)*reg_loss \
-               + self.hparams.gamma*rec_loss \
+        loss = (1-self.hparams.gamma)*self.reg_loss(y, y_hat) \
+               + self.hparams.gamma*self.rec_loss(x_hat, x) \
                + self.hparams.reg*self.reg_func(latent) \
-               + self.hparams.smooth_reg* \
-                 roughness(self.decoder.transpose_conv.weight)
+               + self.hparams.smooth_reg \
+                 *self.roughness(self.decoder.transpose_conv.weight)
         return loss
 
-    def rec_loss(self, outputs, targets):
+    def val_rec_loss(self, outputs, targets):
+        """Reconstruction Error"""
         x, y = targets
         x_hat, y_hat, latent = outputs
         return F.mse_loss(x_hat, x)
@@ -937,7 +955,7 @@ class autoencoder_model(encoder_model):
         targets = val_batch
         loss = self.loss(outputs, targets)
         self.log('val_loss', loss, prog_bar=True)
-        self.log('val_rec_loss', self.rec_loss(outputs, targets))
+        self.log('val_rec_loss', self.val_rec_loss(outputs, targets))
         metric = self.metric(outputs, targets)
         self.log('val_MAE', metric, prog_bar=True)
         self.log('hp/val_MAE', metric)
