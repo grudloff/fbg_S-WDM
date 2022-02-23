@@ -551,6 +551,15 @@ class decoder(nn.Module):
         self.A = nn.Parameter(torch.ones(vars.Q))
         parametrize.register_parametrization(self, "A", UnitCap())
 
+        # pre narrow conv
+        in_channels = vars.Q
+        out_channels = vars.Q
+        # How to deal with changes in Δλ?
+        # kernel_size = int(vars.N*np.max(vars.Δλ)/vars.Δ/4)
+        kernel_size = 51
+        # self.conv = SymmetricConv1d(in_channels, out_channels, kernel, groups=out_channels)
+        self.conv = NarrowConv1D(in_channels, out_channels, kernel_size, groups=out_channels)
+
 
         # single spectra
         in_channels = vars.Q
