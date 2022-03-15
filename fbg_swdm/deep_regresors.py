@@ -9,6 +9,7 @@ from torch import Tensor
 import torch.nn.utils.parametrize as parametrize
 import pytorch_lightning as pl
 import numpy as np
+from math import log
 from random import uniform
 from typing import Tuple
 from torchaudio.functional import lowpass_biquad
@@ -282,6 +283,7 @@ class SigmoidStraightThrough(torch.autograd.Function):
     @staticmethod
     def backward(ctx, dx):
         return dx
+
 def sigmoid_straight_through(u):
     return SigmoidStraightThrough.apply(u)
 
@@ -348,10 +350,9 @@ class SymmetricNormConvTranspose1d(nn.ConvTranspose1d):
         # TODO: replace this for more elegant getattr and setattr in Symmetric
         with torch.no_grad():
             self.weight.data = self.weight.data[..., :kernel_size//2 + 1] # chop kernel dim
-        # parametrize.register_parametrization(self, "weight", Clamp())
         parametrize.register_parametrization(self, "weight", UnitCap())
         parametrize.register_parametrization(self, "weight", Symmetric(kernel_size), unsafe=True)
-        
+
 class SymmetricConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, groups,
                  bias=True):
@@ -683,7 +684,7 @@ class base_model(pl.LightningModule):
         if weights is None:
             weights = np.full(vars.Q, 1/vars.Q)
         weights = weights/np.sum(weights)
-        weights = torch.tensor(weights.copy(), dtype=torch.get_default_dtype())
+        weights = torch.tensor(weights.copy(), dtype=self.dtype, device=self.device)
         self.register_buffer("weights", weights)
 
         if data is None:
