@@ -941,9 +941,11 @@ class encoder_model(base_model):
 
 
 class autoencoder_model(encoder_model):
-    def __init__(self, gamma=1e-3, smooth_reg=1e-6, *args, **kwargs):
+    def __init__(self, gamma=1e-3, smooth_reg=1e-6, latent_noise=None,
         super().__init__(*args, **kwargs)
         self.save_hyperparameters('gamma', 'smooth_reg', logger=False)
+
+        self.latent_noise = latent_noise
 
         self.reduce_on_plateau_monitor = 'val_rec_loss'
 
@@ -951,6 +953,17 @@ class autoencoder_model(encoder_model):
 
     def forward(self, x):
         y, latent = self.encoder(x)
+        if self.latent_noise:
+            if isinstance(self.latent_noise, float):
+                sigma = self.latent_noise
+            else:
+                sigma = 1e-2
+            sigma = sigma*torch.rand((latent.size(0), 1, 1), dtype=latent.dtype,
+                                         layout=latent.layout, device=latent.device)
+            # additive uniform noise
+            latent += sigma*torch.rand_like(latent)
+            latent = F.normalize(latent, dim=-1, p=1)
+
         x = self.decoder(latent)
         return x, y, latent
 
