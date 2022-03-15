@@ -633,22 +633,14 @@ class decoder(nn.Module):
                     # t = torch.sqrt(a)*t*t_next*s
                     r = r + a*r_next*t_2*s
                     t_2 = a*t_2*t_next**2*s**2
-                #normalize
-                # r = r/(x[-1].max().detach()*self.A.prod())
-                # peak = self.transpose_conv.weight[-1,0,vars.N//2].detach()
-                peak = self.transpose_conv.weight[-1, 0,vars.N//2]
-                r = r/(peak*self.A.prod())
                 return r
             self.joint = func
         elif vars.topology == 'parallel':
-            self.i = torch.argmax(sim.get_max_R(vars.S)*vars.A)
             def func(x):
                 #change batch dim for channel dim
                 x = torch.transpose(x, 0, 1)
                 # tensor dot along channel dim
                 r = torch.tensordot(self.A, x, dims=1)
-                #normalize
-                r = r/(x[self.i].max().detach()*self.A[self.i])
                 return r
             self.joint = func
         else:
