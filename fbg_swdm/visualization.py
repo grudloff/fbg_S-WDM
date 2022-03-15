@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
-from fbg_swdm.simulation import X, normalize, denormalize
+from fbg_swdm.simulation import X, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
 
 import torch
@@ -140,7 +140,11 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     error_vect = np.empty(M)
-    noise_vect = 10.0**(-db_vect/10.0)*denormalize(1)
+    noise_vect = 10.0**(-db_vect/10.0)
+    if vars.topology == 'parallel':
+        noise_vect *= np.max(vars.A*get_max_R(vars.S))  
+    else:
+        noise_vect *= np.max(np.cumprod(vars.A)*get_max_R(vars.S))
     for i, noise in enumerate(noise_vect):
         x, y = _gen_sweep(noise=noise, **kwargs)
 
