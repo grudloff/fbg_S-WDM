@@ -667,15 +667,16 @@ class base_model(pl.LightningModule):
     def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
-                 reduce_on_plateau=False, noise=False, shift_augment = False,
-                 encoder_kwargs={}, **kwargs):
+                 reduce_on_plateau=False, noise=False, fixed_noise=True,
+                 shift_augment = False, encoder_kwargs={}, **kwargs):
         super().__init__()
         
         # Hyperparameters
         self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
                                           'optimizer_kwargs','scheduler',
                                           'scheduler_kwargs',
-                                          'reduce_on_plateau', 'noise'],
+                                          'reduce_on_plateau', 'noise',
+                                          'fixed_noise', 'shift_augment'],
                                   logger=False)
 
         if weights is None:
@@ -699,11 +700,14 @@ class base_model(pl.LightningModule):
         self.reduce_on_plateau= reduce_on_plateau
 
         self.noise = noise
+        self.fixed_noise = fixed_noise
 
         self.shift_augment = shift_augment
         self.batch_size = self.hparams.batch_size
 
         self.param_groups = None
+
+        self.finetuning = False
 
         self.reduce_on_plateau_monitor = 'val_MAE'
 
@@ -734,19 +738,41 @@ class base_model(pl.LightningModule):
         self.logger.log_hyperparams(self.hparams, 
                                     {'hp/val_MAE': -1, 'hp/l2': -1})
 
-    def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
+    def add_noise_(self, x):
+        """Adds noise inplace"""
         if self.noise:
-            if isinstance(self.noise, float):
-                sigma = self.noise
+            if self.fixed_noise:
+                if isinstance(self.noise, float):
+                    sigma = self.noise
+                else:
+                    sigma = 1e-2
             else:
-                sigma = 1e-2
+                # Sigma from LogUniform(sigma[0], sigma[1]) for each element
+                if isinstance(self.noise, tuple):
+                    sigma = self.noise
+                    if sigma[1] < sigma[0]:
+                        raise ValueError("Noise tuple should be in accending order")
+                else:
+                    sigma = (1e-6, 1e-1)
+                sigma = torch.exp((log(sigma[1])-log(sigma[0]))*\
+                                        torch.rand((x.size(0), 1), dtype=x.dtype,
+                                                   layout=x.layout, device=x.device)\
+                                        + log(sigma[0])
+                                        )
             noise = sigma*torch.randn_like(x)
             x += noise
+
+    def training_step(self, train_batch, batch_idx):
+        x, y = train_batch
+        if not self.finetuning:
+            # When not finetuning noise is generated at every step
+            self.add_noise_(x)
+            train_batch = x, y
         if self.shift_augment:
             train_batch = batch_shift((x, y), self.shift_augment)
             x, y = train_batch
         outputs = self.forward(x)
+
         targets = train_batch
         loss = self.loss(outputs, targets)
         self.log('train_loss', loss, prog_bar=True)
@@ -771,16 +797,20 @@ class base_model(pl.LightningModule):
         items.pop("loss", None)
         return items
 
-    def _prep_dataloader(self, Z, shuffle=False):
+    def _prep_dataloader(self, Z, shuffle=False, train=False):
         Z = map(lambda x: tensor(x, dtype=torch.get_default_dtype(), 
                                  device=self.device),
                    Z)
+        Z = list(Z)
+        # When finetuning noise is fixed per sample
+        if train and self.finetuning:
+            self.add_noise_(Z[0])
         ds = TensorDataset(*Z)
         return DataLoader(ds, self.batch_size, shuffle)
 
     def train_dataloader(self):
         X, y = self.data[0:2]
-        return self._prep_dataloader((X, y), shuffle=True)
+        return self._prep_dataloader((X, y), shuffle=True, train=True)
 
     def val_dataloader(self):
         X, y = self.data[2:]
