@@ -705,6 +705,8 @@ class base_model(pl.LightningModule):
 
         self.param_groups = None
 
+        self.reduce_on_plateau_monitor = 'val_MAE'
+
         # get one batch from validation as an example 
         for batch in self.val_dataloader():
             x, y = batch
@@ -847,9 +849,11 @@ class base_model(pl.LightningModule):
                 patience = 1000
             else:
                 patience = self.reduce_on_plateau
+
             scheduler = ReduceLROnPlateau(optimizer, patience=patience, mode='min',
-                                          factor=0.9)
-            scheduler = dict(scheduler=scheduler, monitor='val_MAE',
+                                          factor=0.5)
+            scheduler = dict(scheduler=scheduler,
+                             monitor=self.reduce_on_plateau_monitor,
                              #reduce_on_plateau=True,
                              strict =  False,
                              interval = "epoch")
@@ -940,6 +944,8 @@ class autoencoder_model(encoder_model):
     def __init__(self, gamma=1e-3, smooth_reg=1e-6, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.save_hyperparameters('gamma', 'smooth_reg', logger=False)
+
+        self.reduce_on_plateau_monitor = 'val_rec_loss'
 
         self.decoder = decoder()
 
