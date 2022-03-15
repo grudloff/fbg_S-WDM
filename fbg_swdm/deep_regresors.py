@@ -366,15 +366,16 @@ class SymmetricConv1d(nn.Module):
 
 class NarrowConv1D(nn.Conv1d):
     def __init__(self, in_channels, out_channels, kernel_size, groups,
-                 bias=False):
+                 bias=True):
         super().__init__(in_channels, out_channels, kernel_size, 
                          padding='same', bias=bias, groups=groups)
+        nn.init.dirac_(self.weight) # Init to identity
         with torch.no_grad():
             if bias:
                 self.bias.data = self.bias.data[:1]
+                nn.init.zeros_(self.bias)
             self.weight.data = self.weight.data[:1] # chop channel dim
             self.weight.data = self.weight.data[..., :kernel_size//2 + 1] # chop kernel dim
-        nn.init.dirac_(self.weight) # Init to identity
         parametrize.register_parametrization(self, "weight", ChannelSame(in_channels), unsafe=True)
         if bias:
             parametrize.register_parametrization(self, "bias", ChannelSameBias(in_channels), unsafe=True)
