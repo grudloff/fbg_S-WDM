@@ -81,9 +81,9 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
         if not autoencoder:
             x_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
         plt.figure(figsize=figsize)
-        plt.plot(y[:, n_sweep]/n, np.sum(np.abs(x - x_hat), axis=1))
+        plt.plot(y[:, n_sweep]/n, np.mean(np.abs(x - x_hat), axis=1))
         plt.xlabel("$\lambda_{B_2}$ [nm]")
-        plt.ylabel("$Reconstruction Error$")
+        plt.ylabel("$Mean Absolute Error$")
 
 def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
