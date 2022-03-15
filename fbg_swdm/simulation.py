@@ -330,8 +330,7 @@ def plot_freq_dist(X_train, y_train, X_test, y_test):
 @listify
 def normalize(X=None, y=None, *args):
     if X is not None:
-        max = np.max(vars.A*get_max_R(vars.S))
-        X = X/max
+        # x is not normalized
         yield X
 
     if y is not None:
@@ -344,13 +343,12 @@ def normalize(X=None, y=None, *args):
 @listify
 def denormalize(X=None, y=None, *args):
     if X is not None:
-        max = np.max(vars.A*get_max_R(vars.S))
-        X = X*max
+        # x is not normalized
         yield X
 
     if y is not None:
         y = y*vars.Δ + vars.λ0
         yield y    
-
+        
     if args:
         yield from normalize(*args)
