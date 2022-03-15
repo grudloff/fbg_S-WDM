@@ -820,7 +820,7 @@ class base_model(pl.LightningModule):
                                     cycle_momentum=True,
                                     anneal_strategy='cos', three_phase=False)
             if self.trainer:
-                total_steps = self.trainer.max_epochs*vars.M//self.batch_size
+                total_steps = self.trainer.max_epochs*(vars.M//self.batch_size)
                 scheduler_kwargs['total_steps'] = total_steps
             scheduler_kwargs.update(self.scheduler_kwargs)
             scheduler = OneCycleLR(optimizer, 
@@ -942,10 +942,13 @@ class encoder_model(base_model):
 
 class autoencoder_model(encoder_model):
     def __init__(self, gamma=1e-3, smooth_reg=1e-6, latent_noise=None,
+                 finetuning=False,*args, **kwargs):
         super().__init__(*args, **kwargs)
         self.save_hyperparameters('gamma', 'smooth_reg', logger=False)
 
         self.latent_noise = latent_noise
+
+        self.finetuning = finetuning
 
         self.reduce_on_plateau_monitor = 'val_rec_loss'
 
@@ -982,6 +985,9 @@ class autoencoder_model(encoder_model):
             self.rec_loss = null
         elif self.hparams.gamma == 1:
             self.reg_loss = null
+        
+        if self.finetuning:
+            params_to_buffers(self.decoder.conv)
 
     def metric(self, outputs, targets):
         """Mean Absolute Value in picometers"""
