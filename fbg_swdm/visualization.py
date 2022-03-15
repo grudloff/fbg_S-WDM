@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 
 from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
+plt.rcParams['figure.figsize'] = vars.figsize
+plt.rcParams['figure.dpi'] = vars.dpi
 from fbg_swdm.simulation import X, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
 
