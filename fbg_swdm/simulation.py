@@ -26,10 +26,8 @@ def listify(func):
 
 
 # ---------------------------------------------------------------------------- #
-#                                      asd                                     #
+#                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
-
-
 # reflection spectrum
 def gaussian_R(λb, λ, A=1, Δλ=0.4*vars.n):
     return A*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
@@ -83,6 +81,10 @@ def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
                     [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
     return T
 
+# ---------------------------------------------------------------------------- #
+#                                Data Generation                               #
+# ---------------------------------------------------------------------------- #
+
 def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
     if batch_size != None:
@@ -108,16 +110,15 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         x = np.sum(R(A_b, λ, A, Δλ, S), axis=-1)
 
     elif vars.topology == 'serial_new':
+        """Serial topology matrix simulation, no incoherent interface between FBGs"""
 
         T_prev = np.identity(2)
  
-        at = 1
         for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T ,s.T)
 
             # atenuation
-            at = float(a)/at #atenuation depends on previous atenuations
-            At = np.diag([at**(-1.0/4), at**(1.0/4)])
+            At = np.diag([a**(-1.0/4), a**(1.0/4)])
             T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
 
             # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
@@ -128,17 +129,16 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         x = np.abs(x)**2
 
     elif vars.topology == 'serial_rand':
+        """serial_new but with incoherent interface by simulation of random multiple paths"""
         
         M = 10000 # batch_size
         T_prev = np.identity(2)
-        at = 1
         i = 1 # fbg number
         for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T, s.T)
 
             # atenuation
-            at = float(a)/at #atenuation depends on previous atenuations
-            At = np.diag([at**(-1.0/4), at**(1.0/4)])
+            At = np.diag([a**(-1.0/4), a**(1.0/4)])
             T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
 
             # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
@@ -160,24 +160,23 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
 
     elif vars.topology == 'serial_phase':
+        """serial_rand equivalent but with a phase sweep instead, making it more efficient"""
         
         N=vars.φN
-        #phase = np.arange(0,1,1.0/N)
-        phase = np.linspace(1/N/2,1- 1/N/2, N)
+        phase = np.arange(0,1,1.0/N)
+        #phase = np.linspace(1/N/2,1- 1/N/2, N)
         phase = 1j*vars.π*phase
         F = phase[None, :]*np.array([-1, 1])[:, None]
         F = np.exp(F)
         F = np.identity(2)[..., None]*F[None,...]
 
         T_prev = np.identity(2)
-        at = 1
         i = 1 # fbg number
         for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T, s.T)
 
             # atenuation
-            at = float(a)/at #atenuation depends on previous atenuations
-            At = np.diag([at**(-1.0/4), at**(1.0/4)])
+            At = np.diag([a**(-1.0/4), a**(1.0/4)])
             T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
 
             # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
@@ -199,9 +198,9 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         x = np.mean(x, axis=-1) # average different paths
 
     elif vars.topology == 'serial_abs':
+        """Approximation of serial_phase"""
         
         T_prev = np.identity(2)
-        at = 1
 
         for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             r = R(b.T, np.squeeze(λ), 1, l.T, s.T)
@@ -213,8 +212,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
             # t**2-r**2 = 1-2r
 
             # atenuation
-            at = float(a)/at #atenuation depends on previous atenuations
-            At = np.diag([at**(-1.0/2), at**(1.0/2)])
+            At = np.diag([a**(-1.0/2), a**(1.0/2)])
             T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
 
             # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
@@ -224,12 +222,14 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         x = T[1,0]/T[0,0]
 
     elif vars.topology == 'serial':
+        """Old, only valid for 2-FBGs"""
         x = 0
         for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
             x_next = R(b.T, np.squeeze(λ), a, l.T, s.T)
             x = x + (1-x)**2*x_next/(1-x_next*x)
 
     elif vars.topology == 'serial_rec':
+        """Recurrent equivalent of serial_abs """
         r = 0
         t = 1
         at = 1
@@ -243,7 +243,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         x = r
 
     else:
-        raise ValueError()
+        raise ValueError("Topology type not valid")
 
     x = np.squeeze(x)
 
@@ -251,8 +251,10 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
 
 # gen M datapoints on an N-sized spectrum
-def gen_data(train_dist="mesh", portion=0.6, batch_size=None):
+def gen_data(train_dist="uniform", portion=0.6, batch_size=None):
 
+    if vars.topology=='parallel' and np.sum(vars.A)>1:
+        raise ValueError('Attenuation vector should sum less than one in the parallel topology.')
 
     Δ = portion*vars.Δ
 
@@ -294,6 +296,8 @@ def plot_datapoint(X, Y, N_datapoint = 1):
 
 def plot_dist(X_train, y_train, X_test, y_test):
     # Only works for Q=2
+    if vars.Q > 2:
+        raise Warning("Only the distribution of the first 2 FBGs will be shown")
     plt.figure(figsize=(10, 10))
     plt.title("Distribution of samples")
     plt.scatter(y_train[:, 0]/vars.n, y_train[:, 1]/vars.n, s=2, label="train")
