@@ -6,7 +6,6 @@ import fbg_swdm.variables as vars
 from fbg_swdm.simulation import X, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
 
-import torch
 
 def mae(a, b):
     return np.mean(np.abs(a-b))
