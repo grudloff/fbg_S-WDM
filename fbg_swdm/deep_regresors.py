@@ -69,10 +69,12 @@ def weighted_mse_func(weights, y, y_hat):
                                             dim=0))
     return reg_loss
 
-def weighted_mse(weights):
-    def func(y, y_hat):
-        return weighted_mse_func(weights, y, y_hat)
-    return func
+class weighted_mse():
+    def __init__(self, model):
+        self.model = model
+    def __call__(self, y, y_hat):
+        return weighted_mse_func(self.model.weights, y, y_hat)
+
 
 # ------------------------------- Regularizers ------------------------------- #
         
@@ -990,6 +992,8 @@ class encoder_model(base_model):
 
     def setup(self, stage):
         super().setup(stage)
+
+        self.reg_loss = weighted_mse(self)
         
         if self.hparams.reg_type == None or self.hparams.reg == 0:
             self.reg_func = null
@@ -1012,8 +1016,6 @@ class encoder_model(base_model):
                 self.reg_func = variance(self.hparams.sigma)
             else:
                 raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
-
-        self.reg_loss = weighted_mse(self.weights)
 
     def loss(self, outputs, targets):
         x, y = targets
@@ -1073,7 +1075,6 @@ class autoencoder_model(encoder_model):
         else:
             self.roughness = roughness
 
-        self.reg_loss = weighted_mse(self.weights)
         self.rec_loss = F.mse_loss
 
         if self.hparams.gamma == 0:
