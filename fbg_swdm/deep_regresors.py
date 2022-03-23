@@ -59,22 +59,6 @@ def load_old_model(model_class, checkpoint_path, add_hparams):
     model.load_state_dict(state_dict)
     return model
 
-# ---------------------------------- Losses ---------------------------------- #
-    
-@torch.jit.script
-def weighted_mse_func(weights, y, y_hat):
-    # weighted regression loss
-    reg_loss = torch.dot(weights,torch.mean(F.mse_loss(y_hat, y, 
-                                                            reduction='none'), 
-                                            dim=0))
-    return reg_loss
-
-class weighted_mse():
-    def __init__(self, model):
-        self.model = model
-    def __call__(self, y, y_hat):
-        return weighted_mse_func(self.model.weights, y, y_hat)
-
 
 # ------------------------------- Regularizers ------------------------------- #
         
@@ -725,7 +709,7 @@ class decoder(nn.Module):
 # ---------------------------------------------------------------------------- #
 
 class base_model(pl.LightningModule):
-    def __init__(self, weights=None, batch_size=1000, lr = 3e-1,
+    def __init__(self, batch_size=1000, lr = 3e-1,
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
                  reduce_on_plateau=False, noise=False, fixed_noise=True,
@@ -733,18 +717,12 @@ class base_model(pl.LightningModule):
         super().__init__()
         
         # Hyperparameters
-        self.save_hyperparameters(ignore=['weights', 'data', 'optimizer', 
+        self.save_hyperparameters(ignore=['data', 'optimizer', 
                                           'optimizer_kwargs','scheduler',
                                           'scheduler_kwargs',
                                           'reduce_on_plateau', 'noise',
                                           'fixed_noise', 'shift_augment'],
                                   logger=False)
-
-        if weights is None:
-            weights = np.full(vars.Q, 1/vars.Q)
-        weights = weights/np.sum(weights)
-        weights = torch.tensor(weights.copy(), dtype=self.dtype, device=self.device)
-        self.register_buffer("weights", weights)
 
         if data is None:
             data = sim.gen_data()
@@ -993,7 +971,7 @@ class encoder_model(base_model):
     def setup(self, stage):
         super().setup(stage)
 
-        self.reg_loss = weighted_mse(self)
+        self.reg_loss = F.mse_loss
         
         if self.hparams.reg_type == None or self.hparams.reg == 0:
             self.reg_func = null
