@@ -97,11 +97,13 @@ def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     x = torch.arange(length, device = input.device)
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = torch.abs(x - mean) # distance to mean
-    spread = torch.mean(dist_mean*input**2, dim=-1)
-    std = torch.sqrt(torch.mean(dist_mean**2*input, dim=-1))
-    weight = F.relu(std-sigma)
+    spread = torch.sum(dist_mean*input**2, dim=-1)
+    spread = spread/spread.detach()
+    std = torch.sqrt(torch.sum(dist_mean**2*input, dim=-1))
+    std = std/vars.N # normalize by spectral length
+    weight = F.relu(std-sigma)/std
     # weight = std > sigma
-    spread = spread*weight[None, ...]
+    spread = spread*weight
     return spread.mean()
 
 def spread(sigma):
@@ -121,19 +123,22 @@ def kurtosis(kappa):
         return kurtosis_func(input, kappa)
     return func
 
-#@torch.jit.script
+@torch.jit.script
 def spread_kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     x = torch.arange(input.size(-1), device = input.device)
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
-    std = torch.sqrt(torch.mean(dist_mean**2*input.detach(), 
+    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), 
                                 dim=-1, keepdim=True))
     # K = torch.mean(((dist_mean / std[..., None]) ** 4)*input**2*std[..., None], dim=-1)
     # K = torch.mean(((dist_mean ** 4 / std**3))*input**2,
     #                dim=-1, keepdim=True)
-    K = torch.mean(((dist_mean ** 4 / std**4))*input**2,
-                dim=-1, keepdim=True)
-    weight = F.relu(std-sigma)
+    # K = torch.mean(((dist_mean ** 4 / std**4))*input**2,
+    #             dim=-1, keepdim=True)
+    K = torch.sum(dist_mean**4*input**2, dim=-1, keepdim=True)
+    K = K/K.detach()
+    std = std/vars.N # normalize by spectral length
+    weight = F.relu(std-sigma)/std
     # weight = std > sigma
     K = K*weight
     return K.mean()
@@ -149,8 +154,9 @@ def variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
     v = torch.sum(dist_mean**2*input, dim=-1)
-    std = torch.sqrt(v.detach())
-    weight = F.relu(std-sigma)
+    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
+    std = std/vars.N # normalize by spectral length
+    weight = F.relu(std-sigma)/std
     #weight = std > sigma
     v = v*weight
     return v.mean()
@@ -166,9 +172,11 @@ def spread_variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
     v = torch.sum(dist_mean**2*input**2, dim=-1)
-    std = torch.sqrt(v.detach())
-    # weight = F.relu(std-sigma)
-    weight = std > sigma
+    v = v/v.detach()
+    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
+    std = std/vars.N # normalize by spectral length
+    weight = F.relu(std-sigma)/std
+    # weight = std > sigma
     v = v*weight
     return v.mean()
 
