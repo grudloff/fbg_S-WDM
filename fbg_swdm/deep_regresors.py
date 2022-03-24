@@ -125,7 +125,8 @@ def kurtosis(kappa):
 
 @torch.jit.script
 def spread_kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
-    x = torch.arange(input.size(-1), device = input.device)
+    length = input.size(-1)
+    x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
     std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), 
@@ -137,7 +138,6 @@ def spread_kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     #             dim=-1, keepdim=True)
     K = torch.sum(dist_mean**4*input**2, dim=-1, keepdim=True)
     K = K/K.detach()
-    std = std/vars.N # normalize by spectral length
     weight = F.relu(std-sigma)/std
     # weight = std > sigma
     K = K*weight
@@ -150,12 +150,12 @@ def spread_kurtosis(sigma):
 
 @torch.jit.script
 def variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
-    x = torch.arange(input.size(-1), device = input.device)
+    length = input.size(-1)
+    x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
     v = torch.sum(dist_mean**2*input, dim=-1)
     std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
-    std = std/vars.N # normalize by spectral length
     weight = F.relu(std-sigma)/std
     #weight = std > sigma
     v = v*weight
@@ -168,13 +168,13 @@ def variance(sigma):
 
 @torch.jit.script
 def spread_variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
-    x = torch.arange(input.size(-1), device = input.device)
+    length = input.size(-1)
+    x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
     v = torch.sum(dist_mean**2*input**2, dim=-1)
     v = v/v.detach()
     std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
-    std = std/vars.N # normalize by spectral length
     weight = F.relu(std-sigma)/std
     # weight = std > sigma
     v = v*weight
