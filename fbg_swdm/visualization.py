@@ -7,7 +7,7 @@ plt.rcParams['figure.figsize'] = vars.figsize
 plt.rcParams['figure.dpi'] = vars.dpi
 from fbg_swdm.simulation import X, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
-
+from scipy.signal import sawtooth
 
 def mae(a, b):
     return np.mean(np.abs(a-b))
@@ -39,13 +39,25 @@ def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
         x += np.random.randn(*x.shape)*noise
     return x, y 
 
+def _gen_triang_sweep(d=0.6*n, N=300, noise=False):
+    t =  np.linspace(0, 1, N)
+    y = np.column_stack([d/vars.Δ*sawtooth(2*vars.π*i*t+vars.π/2, width=0.5) \
+                         for i in range(vars.Q)])
+    y = denormalize(y=y)
+    x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
+    if noise:
+        x += np.random.randn(*x.shape)*noise
+    return x, y 
+
 
 # Plot sweep of one FBG with the other static
-def plot_sweep(model, norm=True, rec_error=False, **kwargs):
+def plot_sweep(model, norm=True, rec_error=False, invert=False, **kwargs):
     
-    n_sweep = int(not kwargs['invert']) # select y row that sweeps
 
-    x, y = _gen_sweep(**kwargs)
+    if vars.Q == 2:
+        x, y = _gen_sweep(invert=invert, **kwargs)
+    else:
+        x, y = _gen_triang_sweep(**kwargs)
 
     autoencoder = isinstance(model, autoencoder_model)
 
@@ -65,31 +77,38 @@ def plot_sweep(model, norm=True, rec_error=False, **kwargs):
 
     plot_dist(error/p, "Absolute Error [pm]", mean=True)
 
+    
+
     fig = plt.figure(figsize=figsize)
 
     a1 = plt.gca()
-    a1.plot(y[:, n_sweep]/n, y_hat/n, linewidth=2)
-    a1.set_xlabel("$\lambda_{B_2}$ [nm]")
-    a1.set_ylabel('$\lambda_{B_i}$ [nm]')
+    a1.plot(y/n, linewidth=2,
+            label=["$y_{i}$" for i in range(1, vars.Q+1)])
+    a1.plot(y_hat/n, linewidth=2, linestyle="-.",
+            label=["$\hat{y}_{i}$" for i in range(1, vars.Q+1)])
+    a1.set_ylabel('$\lambda_{B}$ [nm]')
 
     a2 = a1.twinx()
-    a2.plot(y[:, n_sweep]/n, np.sum(error, axis=1)/p, "--r")
+    a2.plot(np.sum(error, axis=1)/p, ":r", label='Absolute Error')
     a2.set_ylabel('Absolute Error [pm]')
-    fig.legend(labels=("FBG1", "FBG2", "Absolute Error"))
+    fig.legend()
 
     if rec_error:
         if not autoencoder:
             x_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
         plt.figure(figsize=figsize)
-        plt.plot(y[:, n_sweep]/n, np.mean(np.abs(x - x_hat), axis=1))
-        plt.xlabel("$\lambda_{B_2}$ [nm]")
-        plt.ylabel("$Mean Absolute Error$")
+        plt.plot(np.mean(np.abs(x - x_hat), axis=1))
+        plt.ylabel("Mean Absolute Reconstruction Error")
 
 def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
     autoencoder = isinstance(model, autoencoder_model)
 
-    x, y = _gen_sweep(**kwargs)
+    
+    if vars.Q == 2:
+        x, y = _gen_sweep(**kwargs)
+    else:
+        x, y = _gen_triang_sweep(**kwargs)
 
     x, y = normalize(x, y)
     if autoencoder:
@@ -104,7 +123,7 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
     if add_center:
         i = len(y_hat)//2
         plt.figure(figsize=vars.figsize)
-        plt.title('y_hat='+str(y_hat[i]))
+        plt.title('$\hat{y} = '+str(y_hat[i])+"$")
         a1 = plt.gca()
         a1.plot(vars.λ, x[i])
         a2 = a1.twinx()
@@ -115,7 +134,7 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
     if add_border:
         for i in [0, len(y_hat)-1]:
             plt.figure(figsize=vars.figsize)
-            plt.title('y_hat='+str(y_hat[i]))
+            plt.title('$\hat{y} =$'+str(y_hat[i])+"$")
             a1 = plt.gca()
             a1.plot(vars.λ, x[i])
             a2 = a1.twinx()
@@ -129,7 +148,7 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
     for i in top_n:
         plt.figure(figsize=vars.figsize)
-        plt.title('y_hat='+str(y_hat[i]))
+        plt.title('$\hat{y}='+str(y_hat[i])+"$")
         a1 = plt.gca()
         a1.plot(vars.λ, x[i])
         a2 = a1.twinx()
@@ -142,12 +161,14 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     error_vect = np.empty(M)
     noise_vect = 10.0**(-db_vect/10.0)
-    if vars.topology == 'parallel':
+    noise_vect *= np.max(vars.A*get_max_R(vars.S))  
         noise_vect *= np.max(vars.A*get_max_R(vars.S))  
-    else:
-        noise_vect *= np.max(np.cumprod(vars.A)*get_max_R(vars.S))
+    noise_vect *= np.max(vars.A*get_max_R(vars.S))  
     for i, noise in enumerate(noise_vect):
-        x, y = _gen_sweep(noise=noise, **kwargs)
+        if vars.Q == 2:
+            x, y = _gen_sweep(noise=noise, **kwargs)
+        else:
+            x, y = _gen_triang_sweep(noise=noise, **kwargs)
 
         if norm:
             x = normalize(x)
