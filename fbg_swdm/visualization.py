@@ -8,9 +8,38 @@ plt.rcParams['figure.dpi'] = vars.dpi
 from fbg_swdm.simulation import X, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
 from scipy.signal import sawtooth
+from pandas import DataFrame, concat
+from seaborn import pairplot
 
 def mae(a, b):
     return np.mean(np.abs(a-b))
+
+def plot_datapoint(X, Y, N_datapoint = 1):
+    plt.figure(figsize=(20, 10))
+    plt.title("Datapoint visualization")
+    plt.plot(vars.λ/vars.n, X[N_datapoint, :], label="$\sum FBGi$")
+    for i in range(vars.Q):
+        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], Y[N_datapoint, None, i],
+                 vars.A[None, i], vars.Δλ[None, i], vars.S[None, i]),
+                 linestyle='dashed',
+                 label="FBG"+str(i))
+    plt.stem(Y[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
+             basefmt="None", use_line_collection=True)
+    plt.xlabel("Reflection spectrum")
+    plt.xlabel("[nm]")
+    plt.legend()
+
+def plot(X_train, y_train, X_test, y_test):
+    df_train = DataFrame(data=y_train/vars.n, 
+                        columns=['$y_'+str(i+1)+"$" for i in range(vars.Q)])\
+                       .assign(label='Train')
+    df_test = DataFrame(data=y_test/vars.n, 
+                            columns=['$y_'+str(i+1)+"$" for i in range(vars.Q)])\
+                        .assign(label='Test')
+    df = concat([df_train, df_test], ignore_index=True)
+
+    g = pairplot(df, hue='set', diag_kind='hist', markers='.')
+    g._legend.set_title(None) # remove legend title
 
 
 # Plot distribution
@@ -20,7 +49,6 @@ def plot_dist(y, y_label=None, mean=False):
     plt.xlabel(y_label)
     if mean:
         print("mean("+y_label+") =", np.mean(y))
-
 
 def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
     y = np.zeros([N, vars.Q])
@@ -161,8 +189,6 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     error_vect = np.empty(M)
     noise_vect = 10.0**(-db_vect/10.0)
-    noise_vect *= np.max(vars.A*get_max_R(vars.S))  
-        noise_vect *= np.max(vars.A*get_max_R(vars.S))  
     noise_vect *= np.max(vars.A*get_max_R(vars.S))  
     for i, noise in enumerate(noise_vect):
         if vars.Q == 2:

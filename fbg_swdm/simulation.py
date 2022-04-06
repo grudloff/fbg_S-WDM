@@ -277,51 +277,6 @@ def gen_data(train_dist="uniform", portion=0.6, batch_size=None):
 
     return X_train, y_train, X_test, y_test
 
-
-def plot_datapoint(X, Y, N_datapoint = 1):
-    plt.figure(figsize=(20, 10))
-    plt.title("Datapoint visualization")
-    plt.plot(vars.λ/vars.n, X[N_datapoint, :], label="$\sum FBGi$")
-    for i in range(vars.Q):
-        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], Y[N_datapoint, None, i],
-                 vars.A[None, i], vars.Δλ[None, i], vars.S[None, i]),
-                 linestyle='dashed',
-                 label="FBG"+str(i))
-    plt.stem(Y[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
-             basefmt="None", use_line_collection=True)
-    plt.xlabel("Reflection spectrum")
-    plt.xlabel("[nm]")
-    plt.legend()
-
-
-def plot_dist(X_train, y_train, X_test, y_test):
-    # Only works for Q=2
-    if vars.Q > 2:
-        raise Warning("Only the distribution of the first 2 FBGs will be shown")
-    plt.figure(figsize=(10, 10))
-    plt.title("Distribution of samples")
-    plt.scatter(y_train[:, 0]/vars.n, y_train[:, 1]/vars.n, s=2, label="train")
-    plt.scatter(y_test[:, 0]/vars.n, y_test[:, 1]/vars.n, s=2, label="test")
-    plt.ylabel("FBG1[nm]")
-    plt.xlabel("FBG2[nm]")
-    plt.legend()
-
-
-def plot_freq_dist(X_train, y_train, X_test, y_test):
-    plt.figure(figsize=(10, 5))
-    plt.title("Train Histogram")
-    plt.xlabel("[nm]")
-    plt.hist(y_train/vars.n, bins=100, stacked=True, density=True,
-             label=["FBG"+str(i) for i in range(vars.Q)])
-    plt.legend()
-    plt.figure(figsize=(10, 5))
-    plt.title("Test Histogram")
-    plt.xlabel("[nm]")
-    plt.hist(y_test/vars.n, bins=100, stacked=True, density=True,
-             label=["FBG"+str(i) for i in range(vars.Q)])
-    plt.legend()
-
-
 # ---------------------------------------------------------------------------- #
 #                      Normalizations and Denormalization                      #
 # ---------------------------------------------------------------------------- #
