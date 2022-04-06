@@ -38,7 +38,7 @@ def plot(X_train, y_train, X_test, y_test):
                         .assign(label='Test')
     df = concat([df_train, df_test], ignore_index=True)
 
-    g = pairplot(df, hue='set', diag_kind='hist', markers='.')
+    g = pairplot(df, hue='label', diag_kind='hist', markers='.')
     g._legend.set_title(None) # remove legend title
 
 
