@@ -37,12 +37,18 @@ n2 = 1.478  # cladding n
 V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
 try: 
     # normalized frequency LP01
-    from ofiber import LP_mode_value
-    b = LP_mode_value(V, 0, 1)
+    from ofiber import LP_mode_value, LP_clad_irradiance, LP_total_irradiance
+    ell = 0
+    em = 1
+    b = LP_mode_value(V, ell, em)
+    clad = LP_clad_irradiance(V, b, ell)
+    total = LP_total_irradiance(V, b, ell)
+    M_p = clad/total
 except ImportError:
     # normalized frequency LP01 approximation
-    b = (1.1428-0.9960/V)**2  
+    b = (1.1428-0.9960/V)**2
+    M_p = 1-1/V**2  # Portion of power in core
 n_eff = n2 + b*(n1-n2)  # effective refractive index
-M_p = 1-1/V**2  # Portion of power in core
+
 
 φN = 10 # Number of points for phase sweep
