@@ -212,6 +212,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
             # t**2-r**2 = 1-2r
 
             # atenuation
+            a = a.squeeze()
             At = np.diag([a**(-1.0/2), a**(1.0/2)])
             T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
 
