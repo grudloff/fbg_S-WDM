@@ -5,52 +5,111 @@ from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
 plt.rcParams['figure.figsize'] = vars.figsize
 plt.rcParams['figure.dpi'] = vars.dpi
+plt.style.context('seaborn-paper')
 from fbg_swdm.simulation import X, R, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
 from scipy.signal import sawtooth
 from pandas import DataFrame, concat
-from seaborn import pairplot
+from seaborn import pairplot, color_palette, histplot, displot
+import os
 
 def mae(a, b):
     return np.mean(np.abs(a-b))
 
-def plot_datapoint(X, Y, N_datapoint = 1):
-    plt.figure(figsize=(20, 10))
+def plot_datapoint(x, y, N_datapoint = None):
+    if isinstance(N_datapoint, int):
+        x = x[N_datapoint]
+        y = y[N_datapoint]
+
+    fig, ax = plt.subplots()
     plt.title("Datapoint visualization")
-    plt.plot(vars.λ/vars.n, X[N_datapoint, :], label="$\sum FBGi$")
-    for i in range(vars.Q):
-        plt.plot(vars.λ/vars.n, R(vars.λ[:, None], Y[N_datapoint, None, i],
-                 vars.A[None, i], vars.Δλ[None, i], vars.S[None, i]),
-                 linestyle='dashed',
-                 label="FBG"+str(i))
-    plt.stem(Y[N_datapoint, :]/vars.n, np.full(vars.Q, 1), linefmt='r-.', markerfmt="None",
-             basefmt="None", use_line_collection=True)
-    plt.xlabel("Reflection spectrum")
-    plt.xlabel("[nm]")
-    plt.legend()
+    ax.plot(vars.λ/vars.n, x, label="$x$")
+    if vars.topology == 'serial':
+        A = np.cumprod(vars.A)
+    else:
+        A = vars.A
+    with color_palette(n_colors=vars.Q):
+        ax.plot(vars.λ/vars.n, R(vars.λ[:, None], y[None, :],
+                    A[None, :], vars.Δλ[None, :], vars.S[None, :]),
+                    linestyle='--',
+                    label=["$x_"+str(i+1)+"$" for i in range(vars.Q)])
+        for i in range(vars.Q):
+            ax.stem(y[i, None]/vars.n, np.array([1]), linefmt=':', markerfmt="None",
+                basefmt="None", use_line_collection=False,
+                label="$y_"+str(i+1)+"$")
+        plt.xlabel("Reflection spectrum")
+        plt.xlabel("$\lambda [nm]$")
+        plt.legend(loc='right', bbox_to_anchor=(1.15, 0.5), frameon=False)
 
-def plot(X_train, y_train, X_test, y_test):
-    df_train = DataFrame(data=y_train/vars.n, 
-                        columns=['$y_'+str(i+1)+"$" for i in range(vars.Q)])\
-                       .assign(label='Train')
-    df_test = DataFrame(data=y_test/vars.n, 
-                            columns=['$y_'+str(i+1)+"$" for i in range(vars.Q)])\
-                        .assign(label='Test')
+def plot_sweep_datapoint(N_datapoint = 0, N=300, **kwargs):
+    x, y = _gen_sweep(N=N, N_datapoint=N_datapoint, **kwargs)
+    plot_datapoint(x, y)
+
+def _stack_diag_hist(g):
+    # In a pairplot, set diagonal histogram to stacked
+    d = {}
+    def func(x, **kwargs):
+        ax = plt.gca()
+
+        if not ax in d.keys():
+            d[ax] = {"data" : [], "color" : []}
+        d[ax]["data"].append(x)
+        d[ax]["color"].append(kwargs.get("color"))
+
+    g.map_diag(func)
+    for ax, dic in d.items():
+        ax.hist(dic["data"], color=dic["color"], histtype="barstacked")
+
+def _train_test_dataframe(y_train, y_test, column_names):
+    df_train = DataFrame(data=y_train/vars.n, columns=column_names).assign(label='Train')
+    df_test = DataFrame(data=y_test/vars.n, columns=column_names).assign(label='Test')
     df = concat([df_train, df_test], ignore_index=True)
+    return df
 
-    g = pairplot(df, hue='label', diag_kind='hist', markers='.')
+def _comb_func(y):
+    diff_y = np.repeat(y, range(vars.Q-1, -1, -1), axis=-1)\
+        - np.concatenate(tuple(y[...,i::] for i in range(1, vars.Q)), axis=-1)
+    abs_diff_y = np.abs(diff_y)
+    return abs_diff_y
+
+
+def plot(X_train, y_train, X_test, y_test, plot_diff=False):
+    # Plot distribution of y with pairplot
+    df = _train_test_dataframe(y_train, y_test, ['$y_'+str(i+1)+"[nm]$" for i in range(vars.Q)])
+
+    g = pairplot(df, hue='label', diag_kind='hist', corner=True, height=3.0, plot_kws={"s": 1},
+                 diag_kws={"bins": vars.N})
+    # g.fig.set_size_inches(15,15)
     g._legend.set_title(None) # remove legend title
+    # _stack_diag_hist(g)
 
+    if plot_diff:
+        diff_y_train = _comb_func(y_train)
+        diff_y_test = _comb_func(y_test)
+        indices = range(1, vars.Q+1)
+        df = _train_test_dataframe(diff_y_train, diff_y_test,
+                                   ['$|\Delta\{y_'+str(i)+",y_"+str(j)+"\}|[nm]$"
+                                    for i,j in zip(np.repeat(indices, range(vars.Q-1, -1, -1)),
+                                    np.concatenate(tuple(indices[i::] for i in range(1, vars.Q)), axis=-1))])
+        g = pairplot(df, hue='label', diag_kind='hist', corner=True, height=3.0, plot_kws={"s": 1},
+                     diag_kws={"bins": vars.N})
+        g._legend.set_title(None) # remove legend title
 
 # Plot distribution
-def plot_dist(y, y_label=None, mean=False):
-    plt.figure(figsize=figsize)
-    plt.hist(y, bins=100, stacked=True, density=True)
-    plt.xlabel(y_label)
+def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=False, figname=None):
+    df = DataFrame(data=y, columns=['$FBG_'+str(i+1)+"$" for i in range(vars.Q)])
+    # g = histplot(df, element='poly', log_scale=(True, True), stat='frequency')
+    g = displot(data=df, element='poly', log_scale=(True, True), stat='probability', kind="hist")
+    g.set(xlabel=label+unit)
     if mean:
-        print("mean("+y_label+") =", np.mean(y))
+        g.fig.text(0.8, 0.7, "$\overline{"+short_label+'}'+"= {:.2e}".format(np.mean(y))+unit+"$")
+    # g.fig.legend(loc='right', bbox_to_anchor=(1.05, 0.5), frameon=False)
+    if figname:
+        if not isinstance(figname, str):
+            figname = vars.exp_dir+'\\'+vars.exp_name+'_error_dist'
+        g.fig.savefig(figname+'.pdf', bbox_inches='tight')
 
-def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
+def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=False):
     y = np.zeros([N, vars.Q])
     # Static
     y[:, 0] = vars.λ0
@@ -59,33 +118,40 @@ def _gen_sweep(d=0.6*n, N=300, noise=False, invert=False):
 
     if invert:
         y = y[:,::-1]
+    
+    if isinstance(N_datapoint, int):
+        y = y[N_datapoint]
 
     # broadcast shape: N, M, FBGN
     x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
 
     if noise:
         x += np.random.randn(*x.shape)*noise
-    return x, y 
+    return x, y
 
-def _gen_triang_sweep(d=0.6*n, N=300, noise=False):
+def _gen_sweep_multi(d=0.6*n, N=300, noise=False, invert=None, N_datapoint=None):
     t =  np.linspace(0, 1, N)
     y = np.column_stack([d/vars.Δ*sawtooth(2*vars.π*i*t+vars.π/2, width=0.5) \
                          for i in range(vars.Q)])
     y = denormalize(y=y)
+    if isinstance(N_datapoint, int):
+        y = y[N_datapoint]
     x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
     if noise:
         x += np.random.randn(*x.shape)*noise
     return x, y 
 
+def _gen_sweep(**kwargs):
+    if vars.Q == 2:
+        return _gen_sweep_pair(**kwargs)
+    else:
+        return _gen_sweep_multi(**kwargs)
+
 
 # Plot sweep of one FBG with the other static
-def plot_sweep(model, norm=True, rec_error=False, invert=False, **kwargs):
+def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
     
-
-    if vars.Q == 2:
-        x, y = _gen_sweep(invert=invert, **kwargs)
-    else:
-        x, y = _gen_triang_sweep(**kwargs)
+    x, y = _gen_sweep(noise=noise, **kwargs)
 
     autoencoder = isinstance(model, autoencoder_model)
 
@@ -103,40 +169,50 @@ def plot_sweep(model, norm=True, rec_error=False, invert=False, **kwargs):
 
     error = np.abs(y - y_hat)
 
-    plot_dist(error/p, "Absolute Error [pm]", mean=True)
+    if noise:
+        noise_tag = "_noise{:.0e}".format(noise)
+    else:
+        noise_tag = ''
+    if vars.pre_test:
+        pretest_tag = '_pretest'
+    else:
+        pretest_tag = ''
+    figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep_error_dist'+noise_tag+pretest_tag
+        
+    plot_dist(error/p, mean=True, figname=figname)
 
-    
-
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure()
 
     a1 = plt.gca()
     a1.plot(y/n, linewidth=2,
-            label=["$y_{i}$" for i in range(1, vars.Q+1)])
+            label=["$y_{"+str(i)+"}$" for i in range(1, vars.Q+1)])
     a1.plot(y_hat/n, linewidth=2, linestyle="-.",
-            label=["$\hat{y}_{i}$" for i in range(1, vars.Q+1)])
+            label=["$\hat{y}_{"+str(i)+"}$" for i in range(1, vars.Q+1)])
     a1.set_ylabel('$\lambda_{B}$ [nm]')
 
     a2 = a1.twinx()
-    a2.plot(np.sum(error, axis=1)/p, ":r", label='Absolute Error')
-    a2.set_ylabel('Absolute Error [pm]')
-    fig.legend()
+    a2.plot(np.sum(error, axis=1)/p, ":r", label='MAE')
+    a2.set_ylabel('Mean Absolute Error [pm]')
+
+    fig.legend(loc='right', bbox_to_anchor=(1.075, 0.5), frameon=False)
+
+    figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep'+noise_tag+pretest_tag
+    fig.savefig(figname+'.pdf', bbox_inches='tight')
 
     if rec_error:
         if not autoencoder:
             x_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
-        plt.figure(figsize=figsize)
+        fig = plt.figure()
         plt.plot(np.mean(np.abs(x - x_hat), axis=1))
         plt.ylabel("Mean Absolute Reconstruction Error")
+        figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep_rec_error'+noise_tag+pretest_tag
+        fig.savefig(figname+'.pdf', bbox_inches='tight')
 
 def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
     autoencoder = isinstance(model, autoencoder_model)
-
     
-    if vars.Q == 2:
-        x, y = _gen_sweep(**kwargs)
-    else:
-        x, y = _gen_triang_sweep(**kwargs)
+    x, y = _gen_sweep(**kwargs)
 
     x, y = normalize(x, y)
     if autoencoder:
@@ -146,44 +222,28 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
     
     y_hat = denormalize(y=y_hat)
     y = denormalize(y=y)
-    
-
-    if add_center:
-        i = len(y_hat)//2
-        plt.figure(figsize=vars.figsize)
-        plt.title('$\hat{y} = '+str(y_hat[i])+"$")
-        a1 = plt.gca()
-        a1.plot(vars.λ, x[i])
-        a2 = a1.twinx()
-        a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
-        a2.plot(vars.λ, latent[i].T)
-        if autoencoder:
-            a1.plot(vars.λ, x_hat[i], linestyle='-')
-    if add_border:
-        for i in [0, len(y_hat)-1]:
-            plt.figure(figsize=vars.figsize)
-            plt.title('$\hat{y} =$'+str(y_hat[i])+"$")
-            a1 = plt.gca()
-            a1.plot(vars.λ, x[i])
-            a2 = a1.twinx()
-            a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
-            a2.plot(vars.λ, latent[i].T)
-            if autoencoder:
-                a1.plot(vars.λ, x_hat[i], linestyle='-')
 
     MAE = np.sum(np.abs(y-y_hat), axis=1) # mean absolute error
-    top_n = MAE.argsort()[-K:][::-1]
+    top_n = list(MAE.argsort()[-K:][::-1])
+
+    if add_center:
+        top_n.append(len(y_hat)//2)
+    
+    if add_border and vars.Q==2:
+        top_n.append([0, len(y_hat)-1])
 
     for i in top_n:
-        plt.figure(figsize=vars.figsize)
-        plt.title('$\hat{y}='+str(y_hat[i])+"$")
+        plt.figure()
+        plt.title('$\hat{y} = ${'+' , '.join([ '%.2f' % elem for elem in y_hat[i]/vars.n])+"}$[nm]$")
+        plt.xlabel('$\lambda [nm]$')
         a1 = plt.gca()
-        a1.plot(vars.λ, x[i])
+        a1.plot(vars.λ/n, x[i])
+        a1.set_ylabel('$X$')
         a2 = a1.twinx()
         a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
-        a2.plot(vars.λ, latent[i].T)
-        if autoencoder:
-            a1.plot(vars.λ, x_hat[i], linestyle='-')
+        a2.plot(vars.λ/n, latent[i].T)
+        a2.set_ylabel(r'$\tilde{y}$')
+
 
 def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
@@ -191,10 +251,8 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
     noise_vect = 10.0**(-db_vect/10.0)
     noise_vect *= np.max(vars.A*get_max_R(vars.S))  
     for i, noise in enumerate(noise_vect):
-        if vars.Q == 2:
-            x, y = _gen_sweep(noise=noise, **kwargs)
-        else:
-            x, y = _gen_triang_sweep(noise=noise, **kwargs)
+
+        x, y = _gen_sweep(noise=noise, **kwargs)
 
         if norm:
             x = normalize(x)
@@ -206,8 +264,18 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
         error_vect[i] = np.mean(np.abs(y - y_hat))
     
     error_vect /= vars.p # to pm
+
+    if vars.pre_test:
+        pretest_tag = '_pretest'
+    else:
+        pretest_tag = ''
+    save_file = vars.exp_dir+'\\'+vars.exp_name+'_error_snr'+pretest_tag+'.npz'
+    with open(vars.exp_dir+'\\log.txt','a') as file:
+        file.write("error_snr: "+save_file+'\n')
+    with open(save_file, 'wb') as f:
+        np.savez(f, db_vect=db_vect, error_vect=error_vect)
     
-    plt.figure(figsize=vars.figsize)
+    plt.figure()
     plt.title('Mean Absolute error vs SNR')
     plt.ylabel('Mean Absolute_error [pm]')
     plt.xlabel('SNR [dB]')
