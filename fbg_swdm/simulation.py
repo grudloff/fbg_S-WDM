@@ -34,11 +34,11 @@ def gaussian_R(λb, λ, A=1, Δλ=0.4*vars.n):
 
 def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
     # Δn in relation to Δλ assuming L=S/κ
-    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.M_p/vars.λ0/S))
+    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.eta/vars.λ0/S))
 
-    κ0 = vars.π*Δn/vars.λ0*vars.M_p
+    κ0 = vars.π*Δn/vars.λ0*vars.eta
     L = S/κ0  # length
-    κ = vars.π*Δn/λ*vars.M_p
+    κ = vars.π*Δn/λ*vars.eta
     
     Δβ = 2*vars.π*vars.n_eff*(1/λ - 1/λb)  # Δβ = β - π/Λ
     s_2 = κ**2 - Δβ**2  # s**2
@@ -269,7 +269,7 @@ def gen_data(train_dist="uniform", portion=0.6, batch_size=None):
     elif train_dist == "uniform":
         y_train = np.random.uniform(vars.λ0-Δ, vars.λ0+Δ, [vars.M, vars.Q])
 
-    y_test = np.random.uniform(vars.λ0-Δ, vars.λ0+Δ, [np.int(vars.test_M),
+    y_test = np.random.uniform(vars.λ0-Δ, vars.λ0+Δ, [np.int(0.1*vars.M),
                                                       vars.Q])
 
     # broadcast shape: N, M, FBGN

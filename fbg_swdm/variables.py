@@ -44,7 +44,6 @@ topology='parallel'
 
 N = 300  # number of spectral sampling points
 M = 10000  # numbers of sampling points of test sweep
-test_M = 1000
 
 # FBG Characterization
 Q = 2  # Number of FBGs
@@ -73,11 +72,11 @@ try:
     b = LP_mode_value(V, ell, em)
     clad = LP_clad_irradiance(V, b, ell)
     total = LP_total_irradiance(V, b, ell)
-    M_p = clad/total
+    eta = clad/total
 except ImportError:
     # normalized frequency LP01 approximation
     b = (1.1428-0.9960/V)**2
-    M_p = 1-1/V**2  # Portion of power in core
+    eta = 1-1/V**2  # Portion of power in core
 n_eff = n2 + b*(n1-n2)  # effective refractive index
 
 
