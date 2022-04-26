@@ -281,7 +281,7 @@ def get_kernel_sizes(n_layers, target, verbose=False):
 def transpose_conv_init(model):
     A_b = np.array([vars.λ0]*vars.Q)
     λ = np.linspace(vars.λ0 - vars.Δ, vars.λ0 + vars.Δ, vars.N+1)
-    A=np.array([1, 1]) # no attenuation
+    A=np.array([1]*vars.Q) # no attenuation
     Δλ=vars.Δλ
     S=vars.S
     A_b = A_b[:, None]
