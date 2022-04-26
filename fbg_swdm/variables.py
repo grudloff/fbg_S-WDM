@@ -1,6 +1,36 @@
 import numpy as np
 from math import pi as π
 from math import sqrt
+from sys import modules
+from os import makedirs
+from os.path import join
+from json import dumps, JSONEncoder
+from datetime import datetime
+
+_module = modules[__name__]
+
+base_dir = ''
+exp_name = 'base_exp'
+exp_dir = join(base_dir, exp_name)
+
+class NumpyEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return JSONEncoder.default(self, obj)
+
+def setattrs(**kwargs):
+    """Set multiple attributes of module from dictionary"""
+    for k, v in kwargs.items():
+        setattr(_module, k, v)
+        if k == 'exp_name':
+            setattr(_module, 'exp_dir', join(base_dir, exp_name))
+            makedirs(exp_dir, exist_ok=True)
+    kwargs.pop("λ", None)
+    with open(exp_dir+'\\log.txt','a') as file:
+        file.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"))
+        file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
+        file.write('\n')
 
 figsize = (16, 12)
 dpi = 216
