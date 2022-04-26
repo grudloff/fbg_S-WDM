@@ -233,14 +233,12 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         """Recurrent equivalent of serial_abs """
         r = 0
         t = 1
-        at = 1
         for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            at = float(a)/at
             r_next = R(b.T, np.squeeze(λ), 1, l.T, s.T)
             t_next = 1 - r_next
-            F = 1/(1 - at*r*r_next) # resonance
-            r = r + at*r_next*t**2*F
-            t = sqrt(at)*t*t_next*F
+            F = 1/(1 - a*r*r_next) # resonance
+            r = r + a*r_next*t**2*F
+            t = sqrt(a)*t*t_next*F
         x = r
 
     else:
