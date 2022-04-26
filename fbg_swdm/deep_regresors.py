@@ -999,7 +999,7 @@ class encoder_model(base_model):
             elif self.hparams.reg_type == 'variance':
                 self.reg_func = variance(self.hparams.sigma)
             elif self.hparams.reg_type == 'spread_variance':
-                self.reg_func = variance(self.hparams.sigma)
+                self.reg_func = spread_variance(self.hparams.sigma)
             else:
                 raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
 
