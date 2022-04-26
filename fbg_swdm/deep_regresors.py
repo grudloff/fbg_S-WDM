@@ -670,7 +670,6 @@ class decoder(nn.Module):
         # joint spectra
         if vars.topology.startswith('serial'):
             # TODO: add warning if not serial_rec or serial??
-            # peak reflectance assigned to the last FBG (i=-1)
             def func(x):
                 #change batch dim for channel dim
                 x = torch.transpose(x, 0, 1)
@@ -721,7 +720,8 @@ class base_model(pl.LightningModule):
                  data=None, optimizer='adam', optimizer_kwargs={},
                  weight_decay=0, scheduler='one_cycle', scheduler_kwargs={},
                  reduce_on_plateau=False, noise=False, fixed_noise=True,
-                 shift_augment = False, encoder_kwargs={}, **kwargs):
+                 shift_augment = False, encoder_kwargs={}, smooth_latent=1e-6,
+                 **kwargs):
         super().__init__()
         
         # Hyperparameters
@@ -1008,7 +1008,8 @@ class encoder_model(base_model):
         y_hat, latent = outputs
 
         loss = self.reg_loss(y, y_hat)\
-              + self.hparams.reg*self.reg_func(latent)
+              + self.hparams.reg*self.reg_func(latent)\
+              + self.hparams.smooth_latent*roughness(latent)
         return loss
     
     def batch_forward(self, X):
@@ -1024,10 +1025,10 @@ class encoder_model(base_model):
 
 
 class autoencoder_model(encoder_model):
-    def __init__(self, gamma=1e-3, smooth_reg=1e-6, latent_noise=None,
+    def __init__(self, gamma=1e-3, smooth_kernel=1e-6, latent_noise=None,
                  finetuning=False,*args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.save_hyperparameters('gamma', 'smooth_reg', logger=False)
+        self.save_hyperparameters('gamma', 'smooth_kernel', logger=False)
 
         self.latent_noise = latent_noise
 
@@ -1056,7 +1057,7 @@ class autoencoder_model(encoder_model):
     def setup(self, stage=0):
         super().setup(stage)
 
-        if self.hparams.smooth_reg == 0:
+        if self.hparams.smooth_kernel == 0:
             self.roughness = null
         else:
             self.roughness = roughness
@@ -1068,8 +1069,8 @@ class autoencoder_model(encoder_model):
         elif self.hparams.gamma == 1:
             self.reg_loss = null
         
-        if self.finetuning:
-            params_to_buffers(self.decoder.conv)
+        # if self.finetuning:
+        #     params_to_buffers(self.decoder.conv)
 
     def metric(self, outputs, targets):
         """Mean Absolute Value in picometers"""
@@ -1089,7 +1090,8 @@ class autoencoder_model(encoder_model):
         loss = (1-self.hparams.gamma)*self.reg_loss(y, y_hat) \
                + self.hparams.gamma*self.rec_loss(x_hat, x) \
                + self.hparams.reg*self.reg_func(latent) \
-               + self.hparams.smooth_reg \
+               + self.hparams.smooth_latent*roughness(latent)\
+               + self.hparams.smooth_kernel \
                  *self.roughness(self.decoder.transpose_conv.weight)
         return loss
 
