@@ -32,8 +32,9 @@ def setattrs(**kwargs):
         file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
         file.write('\n')
 
-figsize = (16, 12)
+figsize = (8, 6)
 dpi = 216
+pre_test=False
 
 # prefixes
 μ = 10**-6  # micro
