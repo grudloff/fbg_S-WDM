@@ -77,8 +77,8 @@ def plot(X_train, y_train, X_test, y_test, plot_diff=False):
     # Plot distribution of y with pairplot
     df = _train_test_dataframe(y_train, y_test, ['$y_'+str(i+1)+"[nm]$" for i in range(vars.Q)])
 
-    g = pairplot(df, hue='label', diag_kind='hist', corner=True, height=3.0, plot_kws={"s": 1},
-                 diag_kws={"bins": vars.N})
+    g = pairplot(df, hue='label', diag_kind='hist', height=3.0, plot_kws={"s": 1},
+                 diag_kws=dict(bins=vars.N, element='poly'))
     # g.fig.set_size_inches(15,15)
     g._legend.set_title(None) # remove legend title
     # _stack_diag_hist(g)
@@ -88,15 +88,15 @@ def plot(X_train, y_train, X_test, y_test, plot_diff=False):
         diff_y_test = _comb_func(y_test)
         indices = range(1, vars.Q+1)
         df = _train_test_dataframe(diff_y_train, diff_y_test,
-                                   ['$|\Delta\{y_'+str(i)+",y_"+str(j)+"\}|[nm]$"
+                                   ['$|y_'+str(i)+"-y_"+str(j)+"|[nm]$"
                                     for i,j in zip(np.repeat(indices, range(vars.Q-1, -1, -1)),
                                     np.concatenate(tuple(indices[i::] for i in range(1, vars.Q)), axis=-1))])
-        g = pairplot(df, hue='label', diag_kind='hist', corner=True, height=3.0, plot_kws={"s": 1},
-                     diag_kws={"bins": vars.N})
+        g = pairplot(df, hue='label', diag_kind='hist', height=3.0, plot_kws={"s": 1},
+                     diag_kws=dict(bins=vars.N, element='poly'))
         g._legend.set_title(None) # remove legend title
 
 # Plot distribution
-def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=False, figname=None):
+def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=True, figname=None):
     df = DataFrame(data=y, columns=['$FBG_'+str(i+1)+"$" for i in range(vars.Q)])
     # g = histplot(df, element='poly', log_scale=(True, True), stat='frequency')
     g = displot(data=df, element='poly', log_scale=(True, True), stat='probability', kind="hist")
@@ -109,7 +109,7 @@ def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=Fa
             figname = vars.exp_dir+'\\'+vars.exp_name+'_error_dist'
         g.fig.savefig(figname+'.pdf', bbox_inches='tight')
 
-def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=False):
+def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=None):
     y = np.zeros([N, vars.Q])
     # Static
     y[:, 0] = vars.λ0
@@ -194,7 +194,7 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
     a2.plot(np.sum(error, axis=1)/p, ":r", label='MAE')
     a2.set_ylabel('Mean Absolute Error [pm]')
 
-    fig.legend(loc='right', bbox_to_anchor=(1.075, 0.5), frameon=False)
+    fig.legend(loc='right', bbox_to_anchor=(1.085, 0.5), frameon=False)
 
     figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep'+noise_tag+pretest_tag
     fig.savefig(figname+'.pdf', bbox_inches='tight')
@@ -230,7 +230,7 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
         top_n.append(len(y_hat)//2)
     
     if add_border and vars.Q==2:
-        top_n.append([0, len(y_hat)-1])
+        top_n.extend([0, len(y_hat)-1])
 
     for i in top_n:
         plt.figure()
@@ -238,7 +238,7 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
         plt.xlabel('$\lambda [nm]$')
         a1 = plt.gca()
         a1.plot(vars.λ/n, x[i])
-        a1.set_ylabel('$X$')
+        a1.set_ylabel('$x$')
         a2 = a1.twinx()
         a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
         a2.plot(vars.λ/n, latent[i].T)
