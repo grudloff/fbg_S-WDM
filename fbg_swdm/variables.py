@@ -27,7 +27,9 @@ def setattrs(**kwargs):
             global exp_dir
             exp_dir = join(base_dir, exp_name)
             makedirs(exp_dir, exist_ok=True)
-    kwargs.pop("λ", None)
+        elif k=="N":
+            global λ
+            λ = np.linspace(λ0 - Δ, λ0 + Δ, N)
     with open(exp_dir+'\\log.txt','a') as file:
         file.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"))
         file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
