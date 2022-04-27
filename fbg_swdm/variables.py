@@ -24,7 +24,8 @@ def setattrs(**kwargs):
     for k, v in kwargs.items():
         setattr(_module, k, v)
         if k == 'exp_name':
-            setattr(_module, 'exp_dir', join(base_dir, exp_name))
+            global exp_dir
+            exp_dir = join(base_dir, exp_name)
             makedirs(exp_dir, exist_ok=True)
     kwargs.pop("λ", None)
     with open(exp_dir+'\\log.txt','a') as file:
