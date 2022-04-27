@@ -245,31 +245,38 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
         a2.set_ylabel(r'$\tilde{y}$')
 
 
-def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
+def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False ,**kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
-    error_vect = np.empty(M)
     noise_vect = 10.0**(-db_vect/10.0)
-    noise_vect *= np.max(vars.A*get_max_R(vars.S))  
-    for i, noise in enumerate(noise_vect):
+    if not split:
+        Q = 1
+        noise_vect *= np.max(vars.A*get_max_R(vars.S))
+        noise_vect = noise_vect[None, :]
+    else:
+        Q = vars.Q
+        noise_vect = np.outer(vars.A*get_max_R(vars.S), noise_vect)
+    error_vect = np.empty((Q, M))
+    for i in range(Q):
+        for j, noise in enumerate(noise_vect[i]):
 
-        x, y = _gen_sweep(noise=noise, **kwargs)
+            x, y = _gen_sweep(noise=noise, **kwargs)
 
-        if norm:
-            x = normalize(x)
-            y_hat = model.predict(x)
-            x, y_hat = denormalize(x, y_hat)
-        else:
-            y_hat = model.predict(x)
+            if norm:
+                x = normalize(x)
+                y_hat = model.predict(x)
+                x, y_hat = denormalize(x, y_hat)
+            else:
+                y_hat = model.predict(x)
 
-        error_vect[i] = np.mean(np.abs(y - y_hat))
+            error_vect[i, j] = np.mean(np.abs(y - y_hat))
     
+    error_vect = error_vect.squeeze()
     error_vect /= vars.p # to pm
 
-    if vars.pre_test:
-        pretest_tag = '_pretest'
-    else:
-        pretest_tag = ''
-    save_file = vars.exp_dir+'\\'+vars.exp_name+'_error_snr'+pretest_tag+'.npz'
+    pretest_tag = '_pretest' if vars.pre_test else ''
+    split_tag = '_split' if split else ''
+    tag = pretest_tag + split_tag
+    save_file = vars.exp_dir+'\\'+vars.exp_name+'_error_snr'+tag+'.npz'
     with open(vars.exp_dir+'\\log.txt','a') as file:
         file.write("error_snr: "+save_file+'\n')
     with open(save_file, 'wb') as f:
@@ -279,5 +286,9 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, **kwargs):
     plt.title('Mean Absolute error vs SNR')
     plt.ylabel('Mean Absolute_error [pm]')
     plt.xlabel('SNR [dB]')
-    plt.plot(db_vect, error_vect)
+    if not split:
+        plt.plot(db_vect, error_vect)
+    else:
+        plt.plot(db_vect, error_vect.T, label=["$SNR_"+str(i)+"$" for i in range(1, vars.Q+1)])
+        plt.legend(loc='upper right', frameon=False)
     plt.yscale('log')
