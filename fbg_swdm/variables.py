@@ -19,6 +19,11 @@ class NumpyEncoder(JSONEncoder):
             return obj.tolist()
         return JSONEncoder.default(self, obj)
 
+def set_base_dir(dir):
+    # Set dir as base directory
+    global base_dir
+    base_dir = dir
+
 def setattrs(**kwargs):
     """Set multiple attributes of module from dictionary"""
     for k, v in kwargs.items():
