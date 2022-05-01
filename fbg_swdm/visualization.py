@@ -10,7 +10,7 @@ from fbg_swdm.simulation import X, R, normalize, denormalize, get_max_R
 from fbg_swdm.deep_regresors import autoencoder_model
 from scipy.signal import sawtooth
 from pandas import DataFrame, concat
-from seaborn import pairplot, color_palette, histplot, displot
+from seaborn import pairplot, color_palette, displot, boxplot
 import os
 
 def mae(a, b):
@@ -228,7 +228,7 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
         a2.set_ylabel(r'$\tilde{y}$')
 
 
-def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False ,**kwargs):
+def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=300 ,**kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     noise_vect = 10.0**(-db_vect/10.0)
     if not split:
@@ -238,11 +238,11 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False ,**kw
     else:
         Q = vars.Q
         noise_vect = np.outer(vars.A*get_max_R(vars.S), noise_vect)
-    error_vect = np.empty((Q, M))
+    error_vect = np.empty((Q, M, N))
     for i in range(Q):
         for j, noise in enumerate(noise_vect[i]):
 
-            x, y = _gen_sweep(noise=noise, **kwargs)
+            x, y = _gen_sweep(noise=noise, N=N, **kwargs)
 
             if norm:
                 x = normalize(x)
@@ -251,8 +251,8 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False ,**kw
             else:
                 y_hat = model.predict(x)
 
-            error_vect[i, j] = np.mean(np.abs(y - y_hat))
-    
+            error_vect[i, j] = np.mean(np.abs(y - y_hat), axis=-1)
+
     error_vect = error_vect.squeeze()
     error_vect /= vars.p # to pm
 
@@ -265,13 +265,21 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False ,**kw
     with open(save_file, 'wb') as f:
         np.savez(f, db_vect=db_vect, error_vect=error_vect)
     
-    plt.figure()
-    plt.title('Mean Absolute error vs SNR')
-    plt.ylabel('Mean Absolute_error [pm]')
-    plt.xlabel('SNR [dB]')
     if not split:
-        plt.plot(db_vect, error_vect)
+        db_vect = np.trunc(db_vect*10)/10
+        boxplot(x=np.repeat(db_vect, N), y=error_vect.flatten(), color='#1f77b4')
     else:
-        plt.plot(db_vect, error_vect.T, label=["$SNR_"+str(i)+"$" for i in range(1, vars.Q+1)])
-        plt.legend(loc='upper right', frameon=False)
+        db_vect = np.trunc(db_vect*10)/10
+        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(Q)],
+                       title = 'SNR reference')
+    plt.ylabel('Absolute Error [pm]')
+    plt.xlabel('SNR [dB]')
     plt.yscale('log')
+
+def group_box_plot(x, y, labels, title=None):
+    Q, M, N = y.shape
+    data = [np.stack((np.repeat(x, N), y[i].flatten()), axis=-1) for i in range(Q)]
+    df = concat([DataFrame(data=data[i], columns=['x', 'y']).assign(label=labels[i]) 
+                for i in range(vars.Q)], ignore_index=True)
+    boxplot(data=df, x='x', y='y', hue='label')
+    plt.legend(title=title, loc='upper right', frameon=False)
