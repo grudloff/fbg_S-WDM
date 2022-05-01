@@ -45,21 +45,6 @@ def plot_sweep_datapoint(N_datapoint = 0, N=300, **kwargs):
     x, y = _gen_sweep(N=N, N_datapoint=N_datapoint, **kwargs)
     plot_datapoint(x, y)
 
-def _stack_diag_hist(g):
-    # In a pairplot, set diagonal histogram to stacked
-    d = {}
-    def func(x, **kwargs):
-        ax = plt.gca()
-
-        if not ax in d.keys():
-            d[ax] = {"data" : [], "color" : []}
-        d[ax]["data"].append(x)
-        d[ax]["color"].append(kwargs.get("color"))
-
-    g.map_diag(func)
-    for ax, dic in d.items():
-        ax.hist(dic["data"], color=dic["color"], histtype="barstacked")
-
 def _train_test_dataframe(y_train, y_test, column_names):
     df_train = DataFrame(data=y_train/vars.n, columns=column_names).assign(label='Train')
     df_test = DataFrame(data=y_test/vars.n, columns=column_names).assign(label='Test')
@@ -78,7 +63,7 @@ def plot(X_train, y_train, X_test, y_test, plot_diff=False):
     df = _train_test_dataframe(y_train, y_test, ['$y_'+str(i+1)+"[nm]$" for i in range(vars.Q)])
 
     g = pairplot(df, hue='label', diag_kind='hist', height=3.0, plot_kws={"s": 1},
-                 diag_kws=dict(bins=vars.N, element='poly'))
+                 diag_kws=dict(element='poly'))
     # g.fig.set_size_inches(15,15)
     g._legend.set_title(None) # remove legend title
     # _stack_diag_hist(g)
@@ -92,18 +77,16 @@ def plot(X_train, y_train, X_test, y_test, plot_diff=False):
                                     for i,j in zip(np.repeat(indices, range(vars.Q-1, -1, -1)),
                                     np.concatenate(tuple(indices[i::] for i in range(1, vars.Q)), axis=-1))])
         g = pairplot(df, hue='label', diag_kind='hist', height=3.0, plot_kws={"s": 1},
-                     diag_kws=dict(bins=vars.N, element='poly'))
+                     diag_kws=dict(element='poly'))
         g._legend.set_title(None) # remove legend title
 
 # Plot distribution
 def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=True, figname=None):
     df = DataFrame(data=y, columns=['$FBG_'+str(i+1)+"$" for i in range(vars.Q)])
-    # g = histplot(df, element='poly', log_scale=(True, True), stat='frequency')
     g = displot(data=df, element='poly', log_scale=(True, True), stat='probability', kind="hist")
     g.set(xlabel=label+unit)
     if mean:
         g.fig.text(0.8, 0.7, "$\overline{"+short_label+'}'+"= {:.2e}".format(np.mean(y))+unit+"$")
-    # g.fig.legend(loc='right', bbox_to_anchor=(1.05, 0.5), frameon=False)
     if figname:
         if not isinstance(figname, str):
             figname = vars.exp_dir+'\\'+vars.exp_name+'_error_dist'
