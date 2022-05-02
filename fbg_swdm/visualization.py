@@ -231,29 +231,25 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=300 ,**kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     noise_vect = 10.0**(-db_vect/10.0)
-    if not split:
-        Q = 1
-        noise_vect *= np.max(vars.A*get_max_R(vars.S))
-        noise_vect = noise_vect[None, :]
-    else:
-        Q = vars.Q
-        noise_vect = np.outer(vars.A*get_max_R(vars.S), noise_vect)
-    error_vect = np.empty((Q, M, N))
-    for i in range(Q):
-        for j, noise in enumerate(noise_vect[i]):
+    noise_vect *= np.max(vars.A*get_max_R(vars.S))
+    Q = vars.Q if split else 1
+    error_vect = np.empty((M, N, Q))
+    for i, noise in enumerate(noise_vect):
 
-            x, y = _gen_sweep(noise=noise, N=N, **kwargs)
+        x, y = _gen_sweep(noise=noise, N=N, **kwargs)
 
-            if norm:
-                x = normalize(x)
-                y_hat = model.predict(x)
-                x, y_hat = denormalize(x, y_hat)
-            else:
-                y_hat = model.predict(x)
+        if norm:
+            x = normalize(x)
+            y_hat = model.predict(x)
+            x, y_hat = denormalize(x, y_hat)
+        else:
+            y_hat = model.predict(x)
 
-            error_vect[i, j] = np.mean(np.abs(y - y_hat), axis=-1)
+        error = np.abs(y - y_hat)
+        if not split:
+            error = np.mean(error, axis=-1, keepdims=True)
+        error_vect[i] = error
 
-    error_vect = error_vect.squeeze()
     error_vect /= vars.p # to pm
 
     pretest_tag = '_pretest' if vars.pre_test else ''
@@ -265,21 +261,19 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=30
     with open(save_file, 'wb') as f:
         np.savez(f, db_vect=db_vect, error_vect=error_vect)
     
+    db_vect = np.trunc(db_vect*10)/10
     if not split:
-        db_vect = np.trunc(db_vect*10)/10
         boxplot(x=np.repeat(db_vect, N), y=error_vect.flatten(), color='#1f77b4')
     else:
-        db_vect = np.trunc(db_vect*10)/10
-        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(Q)],
-                       title = 'SNR reference')
+        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(Q)])
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('SNR [dB]')
     plt.yscale('log')
 
 def group_box_plot(x, y, labels, title=None):
-    Q, M, N = y.shape
-    data = [np.stack((np.repeat(x, N), y[i].flatten()), axis=-1) for i in range(Q)]
+    M, N, Q = y.shape
+    data = [np.stack((np.repeat(x, N), y[:,:,i].flatten()), axis=-1) for i in range(Q)]
     df = concat([DataFrame(data=data[i], columns=['x', 'y']).assign(label=labels[i]) 
-                for i in range(vars.Q)], ignore_index=True)
+                for i in range(Q)], ignore_index=True)
     boxplot(data=df, x='x', y='y', hue='label')
     plt.legend(title=title, loc='upper right', frameon=False)
