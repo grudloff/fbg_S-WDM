@@ -255,10 +255,10 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=30
     pretest_tag = '_pretest' if vars.pre_test else ''
     split_tag = '_split' if split else ''
     tag = pretest_tag + split_tag
-    save_file = vars.exp_dir+'\\'+vars.exp_name+'_error_snr'+tag+'.npz'
+    save_file = vars.exp_dir+'\\'+vars.exp_name+'_error_snr'+tag
     with open(vars.exp_dir+'\\log.txt','a') as file:
-        file.write("error_snr: "+save_file+'\n')
-    with open(save_file, 'wb') as f:
+        file.write("error_snr: "+save_file+'.npz'+'\n')
+    with open(save_file+'.npz', 'wb') as f:
         np.savez(f, db_vect=db_vect, error_vect=error_vect)
     
     db_vect = np.trunc(db_vect*10)/10
@@ -269,6 +269,7 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=30
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('SNR [dB]')
     plt.yscale('log')
+    plt.savefig(save_file+'.pdf', bbox_inches='tight')
 
 def group_box_plot(x, y, labels, title=None):
     M, N, Q = y.shape
