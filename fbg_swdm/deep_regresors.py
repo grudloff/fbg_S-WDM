@@ -780,10 +780,20 @@ class base_model(pl.LightningModule):
         x, y = targets
         y_hat, latent = outputs
         return torch.norm(latent, p=2, dim=-1).mean()
+    
+    def std(self, outputs, targets):
+        _, latent = outputs
+        length = latent.size(-1)
+        x = torch.arange(length, device = latent.device)/length
+        mean = torch.sum(x*latent.detach(), dim=-1, keepdim=True)
+        dist_mean = x - mean
+        v = torch.sum(dist_mean**2*latent, dim=-1)
+        std = torch.sqrt(v.detach())
+        return std.mean()
 
     def on_train_start(self):
         self.logger.log_hyperparams(self.hparams, 
-                                    {'hp/val_MAE': -1, 'hp/l2': -1})
+                                    {'hp/val_MAE': -1, 'hp/std': -1})
 
     def add_noise_(self, x):
         """Adds noise inplace"""
@@ -836,7 +846,7 @@ class base_model(pl.LightningModule):
         metric = self.metric(outputs, targets)
         self.log('val_MAE', metric, prog_bar=True)
         self.log('hp/val_MAE', metric)
-        self.log('hp/l2', self.l2(outputs, targets))
+        self.log('hp/std', self.std(outputs, targets))
 
     def get_progress_bar_dict(self):
         items = super().get_progress_bar_dict()
@@ -1084,6 +1094,11 @@ class autoencoder_model(encoder_model):
         x_hat, y_hat, latent  = outputs
         return torch.norm(latent, p=2, dim=-1).mean()
 
+    def std(self, outputs, targets):
+        x_hat, y_hat, latent  = outputs
+        outputs = y_hat, latent
+        super().std(outputs, targets)
+
     def loss(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
@@ -1111,7 +1126,7 @@ class autoencoder_model(encoder_model):
         metric = self.metric(outputs, targets)
         self.log('val_MAE', metric, prog_bar=True)
         self.log('hp/val_MAE', metric)
-        self.log('hp/l2', self.l2(outputs, targets))
+        self.log('hp/std', self.std(outputs, targets))
 
     def predict(self, X):
         X = self._prep_dataloader((X,))
