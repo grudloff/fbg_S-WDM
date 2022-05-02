@@ -83,7 +83,7 @@ def plot(X_train, y_train, X_test, y_test, plot_diff=False):
 # Plot distribution
 def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=True, figname=None):
     df = DataFrame(data=y, columns=['$FBG_'+str(i+1)+"$" for i in range(vars.Q)])
-    g = displot(data=df, element='poly', log_scale=(True, True), stat='probability', kind="hist")
+    g = displot(data=df, element='poly', log_scale=(True, False), stat='probability', kind="hist")
     g.set(xlabel=label+unit)
     if mean:
         g.fig.text(0.8, 0.7, "$\overline{"+short_label+'}'+"= {:.2e}".format(np.mean(y))+unit+"$")
