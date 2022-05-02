@@ -61,6 +61,24 @@ def load_old_model(model_class, checkpoint_path, add_hparams):
 
 
 # ------------------------------- Regularizers ------------------------------- #
+
+@torch.jit.script
+def weighted_l1_func(input: Tensor, sigma: float=1e-2) -> Tensor:
+    # input: B, C, W tensor
+    length = input.size(-1)
+    x = torch.arange(length, device = input.device)/length
+    mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
+    dist_mean = torch.abs(x - mean) # distance to mean
+    l1 = torch.norm(input, p=1, dim=-1)
+    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
+    weight = F.relu(std-sigma)/std
+    l1 = l1*weight
+    return l1.mean()
+
+def weighted_l1(sigma):
+    def func(input):
+        return weighted_l1_func(input, sigma)
+    return func
         
 @torch.jit.script
 def kl_div_func(rho: float, input: Tensor) -> Tensor:
@@ -94,15 +112,12 @@ def null(*vars, **kwargs):
 def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     # input: B, C, W tensor
     length = input.size(-1)
-    x = torch.arange(length, device = input.device)
+    x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = torch.abs(x - mean) # distance to mean
-    spread = torch.sum(dist_mean*input**2, dim=-1)
-    spread = spread/spread.detach()
-    std = torch.sqrt(torch.sum(dist_mean**2*input, dim=-1))
-    std = std/vars.N # normalize by spectral length
+    spread = torch.sum(dist_mean*input, dim=-1)
+    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
     weight = F.relu(std-sigma)/std
-    # weight = std > sigma
     spread = spread*weight
     return spread.mean()
 
@@ -112,40 +127,20 @@ def spread(sigma):
     return func
 
 @torch.jit.script
-def kurtosis_func(input: Tensor, kappa: float=10) -> Tensor:
-    mean_output = torch.mean(input, dim=-1, keepdim=True).detach()
-    std_output = torch.std(input, dim=-1, keepdim=True)
-    K = torch.mean((((input - mean_output) / std_output) ** 4), dim=-1)
-    return -K.mean()
-
-def kurtosis(kappa):
-    def func(input):
-        return kurtosis_func(input, kappa)
-    return func
-
-@torch.jit.script
-def spread_kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
+def kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     length = input.size(-1)
     x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
-    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), 
-                                dim=-1, keepdim=True))
-    # K = torch.mean(((dist_mean / std[..., None]) ** 4)*input**2*std[..., None], dim=-1)
-    # K = torch.mean(((dist_mean ** 4 / std**3))*input**2,
-    #                dim=-1, keepdim=True)
-    # K = torch.mean(((dist_mean ** 4 / std**4))*input**2,
-    #             dim=-1, keepdim=True)
-    K = torch.sum(dist_mean**4*input**2, dim=-1, keepdim=True)
-    K = K/K.detach()
+    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1, keepdim=True))
+    K = torch.sum(dist_mean**4*input, dim=-1, keepdim=True)
     weight = F.relu(std-sigma)/std
-    # weight = std > sigma
     K = K*weight
     return K.mean()
 
-def spread_kurtosis(sigma):
+def kurtosis(sigma):
     def func(input):
-        return spread_kurtosis_func(input, sigma)
+        return kurtosis_func(input, sigma)
     return func
 
 @torch.jit.script
@@ -155,51 +150,14 @@ def variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
     dist_mean = x - mean
     v = torch.sum(dist_mean**2*input, dim=-1)
-    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
+    std = torch.sqrt(v.detach())
     weight = F.relu(std-sigma)/std
-    #weight = std > sigma
     v = v*weight
     return v.mean()
 
 def variance(sigma):
     def func(input):
         return variance_func(input, sigma)
-    return func
-
-@torch.jit.script
-def spread_variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
-    length = input.size(-1)
-    x = torch.arange(length, device = input.device)/length
-    mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
-    dist_mean = x - mean
-    v = torch.sum(dist_mean**2*input**2, dim=-1)
-    v = v/v.detach()
-    std = torch.sqrt(torch.sum(dist_mean**2*input.detach(), dim=-1))
-    weight = F.relu(std-sigma)/std
-    # weight = std > sigma
-    v = v*weight
-    return v.mean()
-
-def spread_variance(sigma):
-    def func(input):
-        return spread_variance_func(input, sigma)
-    return func
-
-@torch.jit.script
-def gaussianess_func(input: Tensor, nu: float=1e-2) -> Tensor:
-    length = input.size(-1)
-    x = torch.arange(length, device = input.device)/length
-    mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
-    dist_mean = x - mean
-    g = 1/(nu*torch.sqrt(2*vars.π))*torch.exp(-dist_mean**2/(2*nu**2))
-    g /= g.sum()
-    G = F.relu(input-g)
-    G = G**2
-    return G.mean()
-
-def gaussianess(nu):
-    def func(input):
-        return gaussianess_func(input, nu)
     return func
 
 @torch.jit.script
@@ -1001,17 +959,13 @@ class encoder_model(base_model):
             elif self.hparams.reg_type == 'spread':
                 self.reg_func = spread(self.hparams.sigma)
             elif self.hparams.reg_type == 'kurtosis':
-                self.reg_func = kurtosis(self.hparams.kappa)
-            elif self.hparams.reg_type == 'gaussianess':
-                self.reg_func = gaussianess(self.hparams.nu)
-            elif self.hparams.reg_type == 'spread_kurtosis':
-                self.reg_func = spread_kurtosis(self.hparams.sigma)
+                self.reg_func = kurtosis(self.hparams.sigma)
             elif self.hparams.reg_type == 'variance':
                 self.reg_func = variance(self.hparams.sigma)
-            elif self.hparams.reg_type == 'spread_variance':
-                self.reg_func = spread_variance(self.hparams.sigma)
+            elif self.hparams.reg_type == 'weighted_l1':
+                self.reg_func = weighted_l1(self.hparams.sigma)
             else:
-                raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis}')
+                raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis, variance, weighted_l1}')
 
     def loss(self, outputs, targets):
         x, y = targets
