@@ -72,10 +72,10 @@ M = 10000  # numbers of sampling points of test sweep
 
 # FBG Characterization
 Q = 2  # Number of FBGs
-A = np.array([1, 0.5])  # Atenuation
+A = np.array([1, 0.5])  # Attenuation
 Δλ = np.array([0.2*n, 0.2*n])  # Linewidth
 λ0 = 1550*n  # Central Wavelength
-I = np.array([0.9, 0.9])  # peak reflectiviies
+I = np.array([0.9, 0.9])  # peak reflectivities
 I_max = 0.99
 #S = κ*L in [1,3] ranging from saturated to strong grating
 Δn_dc = np.array([0, 0])
