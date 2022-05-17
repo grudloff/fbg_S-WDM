@@ -28,101 +28,135 @@ def listify(func):
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
+
 # reflection spectrum
-def gaussian_R(λb, λ, A=1, Δλ=0.4*vars.n):
-    return A*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
+def gaussian_R(λb, λ, I=1, Δλ=0.4*vars.n):
+    return I*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
 
-def partial_R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
+def partial_R(λb, λ, Δλ, S, Δn_dc):
     # Δn in relation to Δλ assuming L=S/κ
-    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.eta/vars.λ0/S))
+    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.η/vars.λ0/S))
 
-    κ0 = vars.π*Δn/vars.λ0*vars.eta
+    κ0 = vars.π*Δn/vars.λ0*vars.η
     L = S/κ0  # length
-    κ = vars.π*Δn/λ*vars.eta
+    κ = vars.π*Δn/λ*vars.η
     
     Δβ = 2*vars.π*vars.n_eff*(1/λ - 1/λb)  # Δβ = β - π/Λ
-    s_2 = κ**2 - Δβ**2  # s**2
+    σ = 2*vars.π/λ*Δn_dc*vars.η
+    σ_hat = Δβ + σ
+    s_2 = κ**2 - σ_hat**2  # s**2
     s = np.lib.scimath.sqrt(s_2)
 
-    return s, s_2, L, κ, Δβ
+    return s, s_2, L, κ, σ_hat
 
-def R(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
-
-    s, s_2, L, κ, Δβ = partial_R(λb, λ, A, Δλ, S)
+def true_R(λb, λ, A, Δλ, I, Δn_dc):
+    S = get_S(I)
+    s, s_2, L, κ, σ_hat = partial_R(λb, λ, Δλ, S, Δn_dc)
 
     # auxiliary variables
     sL = s*L
     sinh_sL_2 = np.sinh(sL)**2
     cosh_sL_2 = np.cosh(sL)**2
 
-    R = κ**2*sinh_sL_2/(Δβ**2*sinh_sL_2 + s_2*cosh_sL_2)
+    R = κ**2*sinh_sL_2/(σ_hat**2*sinh_sL_2 + s_2*cosh_sL_2)
 
     R = np.abs(R)  # amplitude
     R = R*A
 
     return R
 
-def get_max_R(S=vars.S):
+def get_I(S):
+    """ Get Peak Reflectivity from saturation """
     return np.tanh(S)**2
 
-def get_S(P):
-    if np.max(P) > 0.99:
+def get_S(I):
+    """ Get Saturation from Peak Reflectivity """
+    if np.max(I) > vars.I_max:
         raise ValueError('Values should be lower than 0.99')
-    S = np.arctanh(np.sqrt(P))
+    S = np.arctanh(np.sqrt(I))
     return S
 
-def transferMatrix(λb, λ, A=vars.A[0], Δλ=vars.Δλ[0], S=vars.S[0]):
-    s, s_2, L, κ, Δβ = partial_R(λb, λ, A, Δλ, S)
+#TODO: transferMatrix for gaussian simulation ?
+def transferMatrix(λb, λ, Δλ, I, Δn_dc):
+    S = get_S(I)
+    s, s_2, L, κ, σ_hat = partial_R(λb, λ, Δλ, S, Δn_dc)
     sL = s*L
     cosh_sL = np.cosh(sL)
     sinh_sL = np.sinh(sL)
 
-    T = np.array([[cosh_sL - 1j*Δβ/s*sinh_sL, -1j*κ/s*sinh_sL],
-                    [1j*κ/s*sinh_sL, cosh_sL + 1j*Δβ/s*sinh_sL]])
+    T = np.array([[cosh_sL - 1j*σ_hat/s*sinh_sL, -1j*κ/s*sinh_sL],
+                    [1j*κ/s*sinh_sL, cosh_sL + 1j*σ_hat/s*sinh_sL]])
     return T
 
-# ---------------------------------------------------------------------------- #
-#                                Data Generation                               #
-# ---------------------------------------------------------------------------- #
+def batch_matmul(A, B):
+    """ Matrix multiplication of first two dimensions of A and B"""
+    return np.einsum('ij...,jk...->ik...', A, B)
 
-def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
+def batch_matmul_outprod(A, B):
+    """ Simultaneous matmul of first two dimensions and outer product of last
+        dimension"""
+    return np.einsum('ij...l,jk...m->ik...lm', A, B)
 
-    if batch_size != None:
-        n = vars.M//batch_size
-        A_b = np.array_split(A_b, n)
-        x = np.concatenate([X(a_b, λ, A, Δλ, S) for a_b in A_b])
-        return x
-
+def prep_dims(A_b, λ, A, Δλ, I, Δn_dc):
     if len(A_b.shape) > 1:
         A_b = A_b[:, None, :]
         λ = λ[None, :, None]
         A = A[None, None, :]
         Δλ = Δλ[None, None, :]
-        S = S[None, None, :]
+        I = I[None, None, :]
+        Δn_dc = Δn_dc[None, None, :]
     else:
         A_b = A_b[None, :]
         λ = λ[:, None]
         A = A[None, :]
         Δλ = Δλ[None, :]
-        S = S[None, :]
+        I = I[None, :]
+        Δn_dc = Δn_dc[None, :]
+    return A_b, λ, A, Δλ, I, Δn_dc
+
+def R(*args, **kwargs):
+    if vars.simulation == 'gaussian':
+        return gaussian_R(*args, **kwargs)
+    elif vars.simulation == 'true':
+        return true_R(*args, **kwargs)
+    else:
+        raise ValueError("simulation must be in {'gaussian','true'}")
+
+# ---------------------------------------------------------------------------- #
+#                                Data Generation                               #
+# ---------------------------------------------------------------------------- #
+
+def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
+
+    # defaults if None
+    λ = vars.λ if λ is None else λ 
+    A = vars.A if A is None else A
+    Δλ = vars.Δλ if Δλ is None else Δλ 
+    I = vars.I if I is None else I
+    Δn_dc = vars.Δn_dc if Δn_dc is None else Δn_dc 
+
+    if batch_size != None:
+        A_b = np.array_split(A_b, vars.M//batch_size)
+        x = np.concatenate([X(a_b, λ, A, Δλ, I, Δn_dc) for a_b in A_b])
+        return x
+
+    A_b, λ, A, Δλ, I, Δn_dc = prep_dims(A_b, λ, A, Δλ, I, Δn_dc)
 
     if vars.topology == 'parallel':
-        x = np.sum(R(A_b, λ, A, Δλ, S), axis=-1)
+        x = np.sum(R(A_b, λ, A, Δλ, I, Δn_dc), axis=-1)
 
     elif vars.topology == 'serial_new':
         """Serial topology matrix simulation, no incoherent interface between FBGs"""
 
         T_prev = np.identity(2)
  
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T ,s.T)
+        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
+            T = transferMatrix(b.T, np.squeeze(λ), l.T ,s.T, δn.T)
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
-
-            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T)
+            T_prev = batch_matmul(T_prev, At)
+            T_prev = batch_matmul(T_prev, T)
 
         T = T_prev
         x = T[1,0]/T[0,0]
@@ -131,25 +165,23 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
     elif vars.topology == 'serial_rand':
         """serial_new but with incoherent interface by simulation of random multiple paths"""
         
-        M = 10000 # batch_size
+        L = 10000 # batch_size
         T_prev = np.identity(2)
         i = 1 # fbg number
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T, s.T)
+        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
+            T = transferMatrix(b.T, np.squeeze(λ), l.T, s.T, δn.T)
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
-
-            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T[..., None])
+            T_prev = batch_matmul(T_prev, At)
+            T_prev = batch_matmul(T_prev, T[..., None])
 
             # random gap phase change
             if i < vars.Q:
-                F = 1j*vars.π*2*np.random.rand(M)[None, :]*np.array([-1, 1])[:, None]
+                F = 1j*vars.π*2*np.random.rand(L)[None, :]*np.array([-1, 1])[:, None]
                 F = np.exp(F)
                 F = np.identity(2)[..., None]*F[None,...]
-                T_prev = np.einsum('ij...,jk...->ik...', T_prev, F[:,:,None])
+                T_prev = batch_matmul(T_prev, F[:,:,None])
 
             i += 1
 
@@ -172,21 +204,17 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
         T_prev = np.identity(2)
         i = 1 # fbg number
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            T = transferMatrix(b.T, np.squeeze(λ), a.T, l.T, s.T)
+        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
+            T = transferMatrix(b.T, np.squeeze(λ), l.T, s.T, δn.T)
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
-
-            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T[..., None])
+            T_prev = batch_matmul(T_prev, At)
+            T_prev = batch_matmul(T_prev, T[..., None])
 
             # scan gap phase change
             if i < vars.Q:
-                # simultaneous matmul of first two dimensions
-                # and outer product of gap phase dimensions
-                T_prev = np.einsum('ij...l,jk...m->ik...lm', T_prev, F[:,:,None,None])
+                T_prev = batch_matmul_outprod(T_prev, F[:,:,None,None])
                 # flatten outer product
                 T_prev = T_prev.reshape(*T_prev.shape[:-2], -1)
 
@@ -202,8 +230,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         
         T_prev = np.identity(2)
 
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            r = R(b.T, np.squeeze(λ), 1, l.T, s.T)
+        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
+            r = R(b.T, np.squeeze(λ), 1, l.T, s.T, δn.T)
             t = 1-r
 
             T = 1/t[None,None,:] \
@@ -214,10 +242,8 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
             # atenuation
             a = a.squeeze()
             At = np.diag([a**(-1.0/2), a**(1.0/2)])
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, At)
-
-            # 'ij...,jk...->ik...' einsum is matmul of first two dimensions
-            T_prev = np.einsum('ij...,jk...->ik...', T_prev, T)
+            T_prev = batch_matmul(T_prev, At)
+            T_prev = batch_matmul(T_prev, T)
 
         T = T_prev
         x = T[1,0]/T[0,0]
@@ -225,16 +251,16 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
     elif vars.topology == 'serial':
         """Old, only valid for 2-FBGs"""
         x = 0
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            x_next = R(b.T, np.squeeze(λ), a, l.T, s.T)
+        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
+            x_next = R(b.T, np.squeeze(λ), a, l.T, s.T, δn.T)
             x = x + (1-x)**2*x_next/(1-x_next*x)
 
     elif vars.topology == 'serial_rec':
         """Recurrent equivalent of serial_abs """
         r = 0
         t = 1
-        for b, a, l, s in zip(A_b.T, A.T, Δλ.T, S.T):
-            r_next = R(b.T, np.squeeze(λ), 1, l.T, s.T)
+        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
+            r_next = R(b.T, np.squeeze(λ), 1, l.T, s.T, δn.T)
             t_next = 1 - r_next
             F = 1/(1 - a*r*r_next) # resonance
             r = r + a*r_next*t**2*F
@@ -242,7 +268,7 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
         x = r
 
     else:
-        raise ValueError("Topology type not valid")
+        raise ValueError("Topology not valid")
 
     x = np.squeeze(x)
 
@@ -250,12 +276,12 @@ def X(A_b, λ=vars.λ, A=vars.A, Δλ=vars.Δλ, S=vars.S, batch_size=None):
 
 
 # gen M datapoints on an N-sized spectrum
-def gen_data(train_dist="uniform", portion=0.6, batch_size=None):
+def gen_data(train_dist="uniform", batch_size=None):
 
     if vars.topology=='parallel' and np.sum(vars.A)>1:
         raise ValueError('Attenuation vector should sum less than one in the parallel topology.')
 
-    Δ = portion*vars.Δ
+    Δ = vars.portion*vars.Δ
 
     if train_dist == "mesh":
         y_train = np.linspace(vars.λ0-Δ, vars.λ0+Δ,
@@ -265,21 +291,20 @@ def gen_data(train_dist="uniform", portion=0.6, batch_size=None):
         y_train = np.reshape(y_train, (vars.Q, vars.M)).T
 
     elif train_dist == "uniform":
-        y_train = np.random.uniform(vars.λ0-Δ, vars.λ0+Δ, [vars.M, vars.Q])
+        y_train = vars.λ0 + np.random.uniform(-Δ, Δ, [vars.M, vars.Q])
 
-    y_test = np.random.uniform(vars.λ0-Δ, vars.λ0+Δ, [np.int(0.1*vars.M),
-                                                      vars.Q])
+    m = int(0.1*vars.M)
+    y_test = vars.λ0 + np.random.uniform(-Δ, Δ, [m, vars.Q])
 
     # broadcast shape: N, M, FBGN
-    X_train = X(y_train, vars.λ, vars.A, vars.Δλ, vars.S, batch_size)
-    X_test = X(y_test, vars.λ, vars.A, vars.Δλ, vars.S, batch_size)
+    X_train = X(y_train, batch_size=batch_size)
+    X_test = X(y_test, batch_size=batch_size)
 
     return X_train, y_train, X_test, y_test
 
 # ---------------------------------------------------------------------------- #
 #                      Normalizations and Denormalization                      #
 # ---------------------------------------------------------------------------- #
-
 
 @listify
 def normalize(X=None, y=None, *args):

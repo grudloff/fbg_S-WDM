@@ -59,8 +59,10 @@ Q = 2  # Number of FBGs
 A = np.array([1, 0.5])  # Atenuation
 Δλ = np.array([0.2*n, 0.2*n])  # Linewidth
 λ0 = 1550*n  # Central Wavelength
-S = np.array([1,1])  # fbg strength
+I = np.array([0.9, 0.9])  # peak reflectiviies
+I_max = 0.99
 #S = κ*L in [1,3] ranging from saturated to strong grating
+Δn_dc = np.array([0, 0])
 
 Δ = 2*n  # Range of Wavelength change
 λ = np.linspace(λ0 - Δ, λ0 + Δ, N)  # Wavelength
