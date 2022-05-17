@@ -140,7 +140,7 @@ class lookuptable(BaseEstimator, RegressorMixin):
         elif self.distance == 'cosine':
             def dist_func(X):
                 alpha = np.sum(self.X_*X[None, ...], axis=-1)
-                alpha = alpha/np.linalg.norm(X)/np.linalg.norm(self._X, axis=-1)
+                alpha = alpha/np.linalg.norm(X)/np.linalg.norm(self.X_, axis=-1)
                 return alpha
         self.dist_func = dist_func
              
