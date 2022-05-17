@@ -1,3 +1,4 @@
+from warnings import WarningMessage
 import numpy as np
 from math import pi as π
 from math import sqrt
@@ -12,6 +13,7 @@ _module = modules[__name__]
 base_dir = ''
 exp_name = 'base_exp'
 exp_dir = join(base_dir, exp_name)
+tag = None
 
 class NumpyEncoder(JSONEncoder):
     def default(self, obj):
@@ -35,7 +37,18 @@ def setattrs(**kwargs):
         elif k=="N":
             global λ
             λ = np.linspace(λ0 - Δ, λ0 + Δ, N)
-    with open(exp_dir+'\\log.txt','a') as file:
+        if k =='Q':
+            variable = ["A", "Δλ", "I", "Δn_dc"]
+            for i in range(len(variable)):
+                var = getattr(_module, variable[i])
+                if len(var) < Q:
+                    setattr(_module, variable[i], np.resize(var, Q))
+        if k == 'portion':
+            global bounds
+            bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
+        if k in ['λ0', 'a', 'n1', 'n2']:
+            set_mode_properties()
+    with open(exp_dir+'\\log.txt','a', encoding="utf-8") as file:
         file.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"))
         file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
         file.write('\n')
@@ -49,7 +62,10 @@ pre_test=False
 n = 10**-9  # nano
 p = 10**-12  # pico
 
-topology='parallel'
+# topology of fbg array
+topology = 'parallel'
+# type of simulation {'true', 'gaussian'}
+simulation = 'true'
 
 N = 300  # number of spectral sampling points
 M = 10000  # numbers of sampling points of test sweep
@@ -66,29 +82,43 @@ I_max = 0.99
 
 Δ = 2*n  # Range of Wavelength change
 λ = np.linspace(λ0 - Δ, λ0 + Δ, N)  # Wavelength
-bounds = (λ0 - Δ, λ0 + Δ)
+portion = 0.6 # portion of Δ 
+bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
 
 # fiber characteristics
 a = 6*μ  # core radius
 n1 = 1.48  # core n
 n2 = 1.478  # cladding n
 
-# mode properties
-V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
 try: 
-    # normalized frequency LP01
-    from ofiber import LP_mode_value, LP_clad_irradiance, LP_total_irradiance
-    ell = 0
-    em = 1
-    b = LP_mode_value(V, ell, em)
-    clad = LP_clad_irradiance(V, b, ell)
-    total = LP_total_irradiance(V, b, ell)
-    eta = clad/total
+    def set_mode_properties():
+        global b, η, V, n_eff
+        V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
+        # normalized frequency LP01
+        from ofiber import LP_mode_value, LP_core_irradiance, LP_total_irradiance
+        ell = 0
+        em = 1
+        b = LP_mode_value(V, ell, em)
+        # Power fraction in core
+        core = LP_core_irradiance(V, b, ell)
+        total = LP_total_irradiance(V, b, ell)
+        η = core/total
+        # effective refractive index
+        n_eff = n2 + b*(n1-n2) 
 except ImportError:
-    # normalized frequency LP01 approximation
-    b = (1.1428-0.9960/V)**2
-    eta = 1-1/V**2  # Portion of power in core
-n_eff = n2 + b*(n1-n2)  # effective refractive index
+    # if ofiber is not installed use approximation
+    def set_fiber_properties():
+        global b, η, V, n_eff
+        V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
+        # normalized frequency LP01
+        b = (1.1428-0.9960/V)**2
+        if V<1:
+            raise WarningMessage("Core power fraction approximation isn't valid for V<1")
+        # power fraction in core
+        η = 1-1/V**2
+        # effective refractive index
+        n_eff = n2 + b*(n1-n2) 
 
+set_mode_properties()
 
 φN = 10 # Number of points for phase sweep
