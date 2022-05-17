@@ -6,12 +6,14 @@ import fbg_swdm.variables as vars
 plt.rcParams['figure.figsize'] = vars.figsize
 plt.rcParams['figure.dpi'] = vars.dpi
 plt.style.context('seaborn-paper')
-from fbg_swdm.simulation import X, R, normalize, denormalize, get_max_R
+from fbg_swdm.simulation import X, R, normalize, denormalize, get_I, prep_dims
 from fbg_swdm.deep_regresors import autoencoder_model
 from scipy.signal import sawtooth
 from pandas import DataFrame, concat
 from seaborn import pairplot, color_palette, displot, boxplot
 import os
+from os.path import join
+from matplotlib.ticker import FormatStrFormatter
 
 def mae(a, b):
     return np.mean(np.abs(a-b))
@@ -28,9 +30,9 @@ def plot_datapoint(x, y, N_datapoint = None):
         A = np.cumprod(vars.A)
     else:
         A = vars.A
+    A_b, λ, A, Δλ, I, Δn_dc = prep_dims(y, vars.λ, vars.A, vars.Δλ, vars.I, vars.Δn_dc)
     with color_palette(n_colors=vars.Q):
-        ax.plot(vars.λ/vars.n, R(vars.λ[:, None], y[None, :],
-                    A[None, :], vars.Δλ[None, :], vars.S[None, :]),
+        ax.plot(vars.λ/vars.n, R(A_b, λ, A, Δλ, I, Δn_dc),
                     linestyle='--',
                     label=["$x_"+str(i+1)+"$" for i in range(vars.Q)])
         for i in range(vars.Q):
@@ -83,13 +85,20 @@ def plot(X_train, y_train, X_test, y_test, plot_diff=False):
 # Plot distribution
 def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=True, figname=None):
     df = DataFrame(data=y, columns=['$FBG_'+str(i+1)+"$" for i in range(vars.Q)])
-    g = displot(data=df, element='poly', log_scale=(True, False), stat='probability', kind="hist")
+    try:
+        g = displot(data=df, element='poly', log_scale=(True, False), stat='probability', kind="hist")
+    except ValueError:
+        # If data has zero previous call will fail with log scale
+        g = displot(data=df, element='poly', log_scale=(False, False), stat='probability', kind="hist")
+        g.set(xscale='symlog')
+
     g.set(xlabel=label+unit)
     if mean:
         g.fig.text(0.8, 0.7, "$\overline{"+short_label+'}'+"= {:.2e}".format(np.mean(y))+unit+"$")
     if figname:
         if not isinstance(figname, str):
-            figname = vars.exp_dir+'\\'+vars.exp_name+'_error_dist'
+            figname = join(vars.exp_dir, 
+                           "_".join(filter(None, (vars.exp_name, vars.tag, 'error_dist'))))
         g.fig.savefig(figname+'.pdf', bbox_inches='tight')
 
 def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=None):
@@ -106,7 +115,7 @@ def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=None)
         y = y[N_datapoint]
 
     # broadcast shape: N, M, FBGN
-    x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
+    x = X(y)
 
     if noise:
         x += np.random.randn(*x.shape)*noise
@@ -119,7 +128,7 @@ def _gen_sweep_multi(d=0.6*n, N=300, noise=False, invert=None, N_datapoint=None)
     y = denormalize(y=y)
     if isinstance(N_datapoint, int):
         y = y[N_datapoint]
-    x = X(y, vars.λ, vars.A, vars.Δλ, vars.S)
+    x = X(y)
     if noise:
         x += np.random.randn(*x.shape)*noise
     return x, y 
@@ -152,16 +161,11 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
 
     error = np.abs(y - y_hat)
 
-    if noise:
-        noise_tag = "_noise{:.0e}".format(noise)
-    else:
-        noise_tag = ''
-    if vars.pre_test:
-        pretest_tag = '_pretest'
-    else:
-        pretest_tag = ''
-    figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep_error_dist'+noise_tag+pretest_tag
-        
+    noise_tag = "_noise{:.0e}".format(noise) if noise else None
+    pretest_tag = 'pretest' if vars.pre_test else None
+    tag = (noise_tag, pretest_tag)
+    figname = join(vars.exp_dir, 
+                "_".join(filter(None, (vars.exp_name, vars.tag, 'sweep_error_dist',*tag)))) 
     plot_dist(error/p, mean=True, figname=figname)
 
     fig = plt.figure()
@@ -174,12 +178,15 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
     a1.set_ylabel('$\lambda_{B}$ [nm]')
 
     a2 = a1.twinx()
-    a2.plot(np.sum(error, axis=1)/p, ":r", label='MAE')
+    a2.plot(np.sum(error, axis=1)/p, ":k", label='MAE')
     a2.set_ylabel('Mean Absolute Error [pm]')
+    a2.set_ylim(bottom=0)
+    # a2.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
 
     fig.legend(loc='right', bbox_to_anchor=(1.085, 0.5), frameon=False)
 
-    figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep'+noise_tag+pretest_tag
+    figname = join(vars.exp_dir, 
+            "_".join(filter(None, (vars.exp_name, vars.tag, 'sweep',*tag))))
     fig.savefig(figname+'.pdf', bbox_inches='tight')
 
     if rec_error:
@@ -188,7 +195,10 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
         fig = plt.figure()
         plt.plot(np.mean(np.abs(x - x_hat), axis=1))
         plt.ylabel("Mean Absolute Reconstruction Error")
-        figname = vars.exp_dir+'\\'+vars.exp_name+'_sweep_rec_error'+noise_tag+pretest_tag
+        plt.ylim(bottom=0)
+        
+        figname = join(vars.exp_dir, 
+                     "_".join(filter(None, (vars.exp_name, vars.tag, 'sweep_rec_error',*tag))))
         fig.savefig(figname+'.pdf', bbox_inches='tight')
 
 def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
@@ -231,9 +241,8 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=300 ,**kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     noise_vect = 10.0**(-db_vect/10.0)
-    noise_vect *= np.max(vars.A*get_max_R(vars.S))
-    Q = vars.Q if split else 1
-    error_vect = np.empty((M, N, Q))
+    noise_vect *= np.max(vars.A*vars.I)
+    error_vect = np.empty((M, N, vars.Q))
     for i, noise in enumerate(noise_vect):
 
         x, y = _gen_sweep(noise=noise, N=N, **kwargs)
@@ -246,32 +255,40 @@ def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=30
             y_hat = model.predict(x)
 
         error = np.abs(y - y_hat)
-        if not split:
-            error = np.mean(error, axis=-1, keepdims=True)
         error_vect[i] = error
 
     error_vect /= vars.p # to pm
 
-    pretest_tag = '_pretest' if vars.pre_test else ''
-    split_tag = '_split' if split else ''
-    tag = pretest_tag + split_tag
-    save_file = vars.exp_dir+'\\'+vars.exp_name+'_error_snr'+tag
+    pretest_tag = 'pretest' if vars.pre_test else None
+    save_file = join(vars.exp_dir, 
+                     "_".join(filter(None, (vars.exp_name, vars.tag, 'error_snr', pretest_tag))))
     with open(vars.exp_dir+'\\log.txt','a') as file:
         file.write("error_snr: "+save_file+'.npz'+'\n')
     with open(save_file+'.npz', 'wb') as f:
         np.savez(f, db_vect=db_vect, error_vect=error_vect)
     
     db_vect = np.trunc(db_vect*10)/10
-    if not split:
-        boxplot(x=np.repeat(db_vect, N), y=error_vect.flatten(), color='#1f77b4')
-    else:
-        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(Q)])
+
+    error_vect_total = np.mean(error_vect, axis=-1)
+    boxplot(x=np.repeat(db_vect, N), y=error_vect_total.flatten(), color='#1f77b4')
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('SNR [dB]')
     plt.yscale('log')
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
 
+    if split:
+        save_file = "_".join((save_file, 'split'))
+        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(Q)])
+        plt.ylabel('Absolute Error [pm]')
+        plt.xlabel('SNR [dB]')
+        plt.yscale('log')
+        plt.savefig(save_file+'.pdf', bbox_inches='tight')
+
+
+
+
 def group_box_plot(x, y, labels, title=None):
+    plt.figure()
     M, N, Q = y.shape
     data = [np.stack((np.repeat(x, N), y[:,:,i].flatten()), axis=-1) for i in range(Q)]
     df = concat([DataFrame(data=data[i], columns=['x', 'y']).assign(label=labels[i]) 
