@@ -7,6 +7,7 @@ from os import makedirs
 from os.path import join
 from json import dumps, JSONEncoder
 from datetime import datetime
+import sys
 import importlib.util
 
 _module = modules[__name__]
@@ -29,6 +30,9 @@ def set_base_dir(dir):
 
 def setattrs(**kwargs):
     """Set multiple attributes of module from dictionary"""
+    mode_properties_flag = False
+    Q_flag = False
+    portion_flag = False
     for k, v in kwargs.items():
         setattr(_module, k, v)
         if k == 'exp_name':
@@ -38,17 +42,25 @@ def setattrs(**kwargs):
         elif k=="N":
             global λ
             λ = np.linspace(λ0 - Δ, λ0 + Δ, N)
-        if k =='Q':
-            variable = ["A", "Δλ", "I", "Δn_dc"]
-            for i in range(len(variable)):
-                var = getattr(_module, variable[i])
-                if len(var) < Q:
-                    setattr(_module, variable[i], np.resize(var, Q))
-        if k == 'portion':
-            global bounds
-            bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
-        if k in ['λ0', 'a', 'n1', 'n2']:
-            set_mode_properties()
+        elif k =='Q':
+            Q_flag = True
+        elif k == 'portion':
+            portion_flag = True
+        elif k in ['λ0', 'a', 'n1', 'n2', 'I']:
+            mode_properties_flag = True
+
+    if Q_flag:
+        variable = ["A", "Δλ", "I", "Δn_dc"]
+        for i in range(len(variable)):
+            var = getattr(_module, variable[i])
+            if len(var) != Q:
+                setattr(_module, variable[i], np.resize(var, Q))
+    if Q_flag or portion_flag:
+        global bounds
+        bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
+    if mode_properties_flag:
+        set_mode_properties()
+
     with open(exp_dir+'\\log.txt','a', encoding="utf-8") as file:
         file.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"))
         file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
@@ -88,6 +100,7 @@ A = np.array([1, 0.5])  # Attenuation
 λ0 = 1550*n  # Central Wavelength
 I = np.array([0.9, 0.9])  # peak reflectivities
 I_max = 0.99
+I_min = 0.4 #
 #S = κ*L in [1,3] ranging from saturated to strong grating
 Δn_dc = np.array([0, 0])
 
@@ -101,9 +114,26 @@ a = 6*μ  # core radius
 n1 = 1.48  # core n
 n2 = 1.478  # cladding n
 
+Ω = np.array([0.31199667363030137, 0.3284120963457749]) # [0, 1]
+
+def get_saturation(ζ):
+    ζ_pow = np.power(ζ, np.arange(2)[:,None])
+    S = np.dot(Ω, ζ_pow)
+    S = np.tanh(S)
+    return S
+
+def get_zeta(I):
+    """ Get ζ = κL from Peak Reflectivity """
+    if I is None:
+        return I
+    if np.max(I) > I_max:
+        raise ValueError('Values should be lower than {}'.format(I_max))
+    ζ = np.arctanh(np.sqrt(I))
+    return ζ
+
 try: 
     def set_mode_properties():
-        global b, η, V, n_eff
+        global b, η, V, n_eff, Δn, κ, L
         V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
         # normalized frequency LP01
         from ofiber import LP_mode_value, LP_core_irradiance, LP_total_irradiance
@@ -115,11 +145,18 @@ try:
         total = LP_total_irradiance(V, b, ell)
         η = core/total
         # effective refractive index
-        n_eff = n2 + b*(n1-n2) 
-except ImportError:
+        n_eff = n2 + b*(n1-n2)
+
+        ζ = get_zeta(I)
+        S = get_saturation(ζ)
+        Δn = Δλ*n_eff/λ0/η/np.sqrt(1 + (π/ζ)**2)/S
+        κ = π*Δn/λ0*η
+        L = ζ/κ
+
+except ModuleNotFoundError:
     # if ofiber is not installed use approximation
-    def set_fiber_properties():
-        global b, η, V, n_eff
+    def set_mode_properties():
+        global b, η, V, n_eff, Δn, κ, L
         V = (2*π/λ0)*a*sqrt(n1**2-n2**2)
         # normalized frequency LP01
         b = (1.1428-0.9960/V)**2
@@ -128,7 +165,13 @@ except ImportError:
         # power fraction in core
         η = 1-1/V**2
         # effective refractive index
-        n_eff = n2 + b*(n1-n2) 
+        n_eff = n2 + b*(n1-n2)
+
+        ζ = get_zeta(I)
+        S = get_saturation(ζ)
+        Δn = Δλ*n_eff/λ0/η/np.sqrt(1 + (π/ζ)**2)/S
+        κ = π*Δn/λ0*η
+        L = ζ/κ
 
 set_mode_properties()
 

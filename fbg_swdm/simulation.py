@@ -30,16 +30,25 @@ def listify(func):
 # ---------------------------------------------------------------------------- #
 
 # reflection spectrum
-def gaussian_R(λb, λ, I=1, Δλ=0.4*vars.n):
-    return I*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
+def gaussian_R(λb, λ, A, Δλ, I, Δn_dc):
+    if I is None:
+        I = vars.I
+    if Δλ is None:
+        Δλ = vars.Δλ
+    return A*I*exp(-4*ln(2)*((λ - λb)/Δλ)**2)
 
-def partial_R(λb, λ, Δλ, S, Δn_dc):
-    # Δn in relation to Δλ assuming L=S/κ
-    Δn = Δλ*2*vars.n_eff/λb/np.sqrt(1 + (λb*vars.π*vars.η/vars.λ0/S))
-
-    κ0 = vars.π*Δn/vars.λ0*vars.η
-    L = S/κ0  # length
-    κ = vars.π*Δn/λ*vars.η
+def partial_R(λb, λ, Δλ, ζ, Δn_dc):
+    if Δλ is None and ζ is None:
+        Δn = vars.Δn
+        κ = vars.κ
+        L = vars.L
+    elif Δλ is None or ζ is None:
+        raise ValueError("Both Δλ and ζ should be None to use precomputed parameters.")
+    else:
+        S = vars.get_saturation(ζ)
+        Δn = Δλ*vars.n_eff/vars.λ0/vars.η/np.sqrt(1 + (vars.π/ζ)**2)/S
+        κ = vars.π*Δn/vars.λ0*vars.η
+        L = ζ/κ  # length
     
     Δβ = 2*vars.π*vars.n_eff*(1/λ - 1/λb)  # Δβ = β - π/Λ
     σ = 2*vars.π/λ*Δn_dc*vars.η
@@ -50,40 +59,34 @@ def partial_R(λb, λ, Δλ, S, Δn_dc):
     return s, s_2, L, κ, σ_hat
 
 def true_R(λb, λ, A, Δλ, I, Δn_dc):
-    S = get_S(I)
-    s, s_2, L, κ, σ_hat = partial_R(λb, λ, Δλ, S, Δn_dc)
+    ζ = vars.get_zeta(I)
+    s, s_2, L, κ, σ_hat = partial_R(λb, λ, Δλ, ζ, Δn_dc)
 
     # auxiliary variables
-    sL = s*L
-    sinh_sL_2 = np.sinh(sL)**2
-    cosh_sL_2 = np.cosh(sL)**2
+    sinh_sL_2 = np.sinh(s*L)**2
+    cosh_sL_2 = 1 + sinh_sL_2 # hyperbolic identity
 
     R = κ**2*sinh_sL_2/(σ_hat**2*sinh_sL_2 + s_2*cosh_sL_2)
 
-    R = np.abs(R)  # amplitude
-    R = R*A
+    R = np.abs(R) # amplitude
+    R = R*A # attenuation
 
     return R
 
-def get_I(S):
+def get_I(ζ):
     """ Get Peak Reflectivity from saturation """
-    return np.tanh(S)**2
-
-def get_S(I):
-    """ Get Saturation from Peak Reflectivity """
-    if np.max(I) > vars.I_max:
-        raise ValueError('Values should be lower than 0.99')
-    S = np.arctanh(np.sqrt(I))
-    return S
+    return np.tanh(ζ)**2
 
 #TODO: transferMatrix for gaussian simulation ?
+# TODO: accepts multiple sensors computation in parallel?
 def transferMatrix(λb, λ, Δλ, I, Δn_dc):
-    S = get_S(I)
-    s, s_2, L, κ, σ_hat = partial_R(λb, λ, Δλ, S, Δn_dc)
+    ζ = vars.get_zeta(I)
+    s, s_2, L, κ, σ_hat = partial_R(λb, λ, Δλ, ζ, Δn_dc)
     sL = s*L
     cosh_sL = np.cosh(sL)
     sinh_sL = np.sinh(sL)
 
+    # TODO: probably have to update this np.array to an adequate stack function
     T = np.array([[cosh_sL - 1j*σ_hat/s*sinh_sL, -1j*κ/s*sinh_sL],
                     [1j*κ/s*sinh_sL, cosh_sL + 1j*σ_hat/s*sinh_sL]])
     return T
@@ -102,15 +105,19 @@ def prep_dims(A_b, λ, A, Δλ, I, Δn_dc):
         A_b = A_b[:, None, :]
         λ = λ[None, :, None]
         A = A[None, None, :]
-        Δλ = Δλ[None, None, :]
-        I = I[None, None, :]
+        if Δλ is not None:
+            Δλ = Δλ[None, None, :]
+        if I is not None:
+            I = I[None, None, :] 
         Δn_dc = Δn_dc[None, None, :]
     else:
         A_b = A_b[None, :]
         λ = λ[:, None]
         A = A[None, :]
-        Δλ = Δλ[None, :]
-        I = I[None, :]
+        if Δλ is not None:  
+            Δλ = Δλ[None, :]
+        if I is not None:
+            I = I[None, :]
         Δn_dc = Δn_dc[None, :]
     return A_b, λ, A, Δλ, I, Δn_dc
 
@@ -129,11 +136,13 @@ def R(*args, **kwargs):
 
 def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **kwargs):
 
+    # TODO: move default to R functions
     # defaults if None
     λ = vars.λ if λ is None else λ 
     A = vars.A if A is None else A
-    Δλ = vars.Δλ if Δλ is None else Δλ 
-    I = vars.I if I is None else I
+    # Don't set I and Δλ to default to use precomputed parameters
+    # Δλ = vars.Δλ if Δλ is None else Δλ 
+    # I = vars.I if I is None else I
     Δn_dc = vars.Δn_dc if Δn_dc is None else Δn_dc 
 
     if batch_size != None:
