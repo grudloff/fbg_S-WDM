@@ -37,7 +37,7 @@ def plot_datapoint(x, y, N_datapoint = None):
                     linestyle='--',
                     label=["$x_"+str(i+1)+"$" for i in range(vars.Q)])
         for i in range(vars.Q):
-            ax.stem(y[i, None]/vars.n, np.array([1]), linefmt=':', markerfmt="None",
+            ax.stem(y[i, None]/vars.n, np.array([1]), linefmt='--', markerfmt="None",
                 basefmt="None", use_line_collection=False,
                 label="$y_"+str(i+1)+"$")
         plt.xlabel("Reflection spectrum")
@@ -162,7 +162,7 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
 
     error = np.abs(y - y_hat)
 
-    noise_tag = "_noise{:.0e}".format(noise) if noise else None
+    noise_tag = "noise{:.0e}".format(noise) if noise else None
     pretest_tag = 'pretest' if vars.pre_test else None
     tag = (noise_tag, pretest_tag)
     figname = join(vars.exp_dir, 
@@ -205,7 +205,7 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
                      "_".join(filter(None, (vars.exp_name, vars.tag, 'sweep_rec_error',*tag))))
         fig.savefig(figname+'.pdf', bbox_inches='tight')
 
-def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
+def check_reconstruction(model, K=10, add_center=True, add_border=False, **kwargs):
 
     autoencoder = isinstance(model, autoencoder_model)
     evolutionary = isinstance(model, ev.GeneticAlgo)
@@ -237,22 +237,37 @@ def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
     for i in top_n:
         plt.figure()
-        plt.title('$\hat{y} = ${'+' , '.join([ '%.2f' % elem for elem in y_hat[i]/vars.n])+"}$[nm]$")
         plt.xlabel('$\lambda [nm]$')
         a1 = plt.gca()
-        a1.plot(vars.λ/n, x[i])
+        a1.plot(vars.λ/n, x[i], label='$x$')
         a1.set_ylabel('$x$')
-        a2 = a1.twinx()
-        a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
-        a2.plot(vars.λ/n, latent[i].T)
-        a2.set_ylabel(r'$\tilde{y}$')
+        for j in range(vars.Q):
+            a1.stem(y[i, j, None]/vars.n, np.max(x[i], keepdims=True), linefmt='-', markerfmt="None",
+                basefmt="None", use_line_collection=False,
+                label="$y_"+str(j+1)+"$")
+
+        if not evolutionary:
+            a2 = a1.twinx()
+            a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
+            a2.plot(vars.λ/n, latent[i].T, label=[r"$\tilde{y}_{"+str(i+1)+"}$" for i in range(vars.Q)])
+            a2.set_ylabel(r'$\tilde{y}$')
+        else:
+            a1.plot(vars.λ/n, x_hat[i], label="$\hat{x}$")
+            for j in range(vars.Q):
+                a1.stem(y_hat[i, j, None]/vars.n, np.max(x[i], keepdims=True), linefmt='--', markerfmt="None",
+                    basefmt="None", use_line_collection=False,
+                    label="$\hat{y}_"+str(j+1)+"$")
+        plt.legend()
 
 
-def error_snr(model, norm=True, min_snr=0, max_snr = 40, M=10, split=False, N=300 ,**kwargs):
+def error_snr(model, norm=None, min_snr=0, max_snr = 40, M=10, split=True, N=300 ,**kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     noise_vect = 10.0**(-db_vect/10.0)
     noise_vect *= np.max(vars.A*vars.I)
     error_vect = np.empty((M, N, vars.Q))
+    if norm is None:
+        # default to False only for evolutionary algorithms
+        norm = False if isinstance(model, ev.GeneticAlgo) else True
     for i, noise in enumerate(noise_vect):
 
         x, y = _gen_sweep(noise=noise, N=N, **kwargs)
