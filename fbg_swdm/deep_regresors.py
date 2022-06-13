@@ -219,13 +219,15 @@ def transpose_conv_init(model):
     λ = np.linspace(vars.λ0 - vars.Δ, vars.λ0 + vars.Δ, vars.N+1)
     A=np.array([1]*vars.Q) # no attenuation
     Δλ=vars.Δλ
-    S=vars.S
+    I=vars.I
+    Δn_dc=vars.Δn_dc
     A_b = A_b[:, None]
     λ = λ[None, :]
     A = A[:, None]
     Δλ = Δλ[:, None]
-    S = S[:, None]
-    data = sim.R(λb=A_b, λ=λ, A=A, Δλ=Δλ, S=S)
+    I = I[:, None]
+    Δn_dc = Δn_dc[:, None]
+    data = sim.R(λb=A_b, λ=λ, A=A, Δλ=Δλ, I=I, Δn_dc=Δn_dc)
     data = data[:, None, :]
     transpose_conv = model.decoder.transpose_conv
     with torch.no_grad():
