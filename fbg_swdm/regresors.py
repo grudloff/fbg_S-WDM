@@ -39,9 +39,8 @@ class ELM(BaseEstimator, RegressorMixin):
         return 1 / (1 + np.exp(-x))
 
     def _hidden_nodes(self, X):
-        G = np.dot(X, self.input_weights_)
-        G = G + self.biases_
-        H = self._sigmoid(G)
+        h = np.dot(X, self.input_weights_) + self.biases_
+        H = self._sigmoid(h)
         return H
 
     def predict(self, X):
@@ -79,14 +78,12 @@ class ELM(BaseEstimator, RegressorMixin):
 
         n_features = X.shape[1]
 
-        self.input_weights_ = np.random.normal(size=[n_features,
-                                                    self.hidden_size])
-
-        self.biases_ = np.random.normal(size=[self.hidden_size])
+        self.input_weights_ = np.random.rand(n_features, self.hidden_size)*2-1
+        self.biases_ = np.random.rand(self.hidden_size)
 
         H = self._hidden_nodes(X)
-        H_moore_penrose = np.linalg.pinv(H)
-        self.output_weights_ = np.dot(H_moore_penrose, y)
+        H_pinv = np.linalg.pinv(H) # pseudo-inverse
+        self.output_weights_ = np.dot(H_pinv, y)
         return self
 
 
