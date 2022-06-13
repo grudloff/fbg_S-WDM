@@ -720,7 +720,7 @@ class base_model(pl.LightningModule):
         return torch.norm(latent, p=2, dim=-1).mean()
     
     def std(self, outputs, targets):
-        _, latent = outputs
+        latent = outputs[-1]
         length = latent.size(-1)
         x = torch.arange(length, device = latent.device)/length
         mean = torch.sum(x*latent.detach(), dim=-1, keepdim=True)
@@ -1027,11 +1027,6 @@ class autoencoder_model(encoder_model):
         x, y = targets
         x_hat, y_hat, latent  = outputs
         return torch.norm(latent, p=2, dim=-1).mean()
-
-    def std(self, outputs, targets):
-        x_hat, y_hat, latent  = outputs
-        outputs = y_hat, latent
-        super().std(outputs, targets)
 
     def loss(self, outputs, targets):
         x, y = targets
