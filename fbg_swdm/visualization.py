@@ -8,6 +8,7 @@ plt.rcParams['figure.dpi'] = vars.dpi
 plt.style.context('seaborn-paper')
 from fbg_swdm.simulation import X, R, normalize, denormalize, get_I, prep_dims
 from fbg_swdm.deep_regresors import autoencoder_model
+import fbg_swdm.evolutionary as ev
 from scipy.signal import sawtooth
 from pandas import DataFrame, concat
 from seaborn import pairplot, color_palette, displot, boxplot
@@ -191,7 +192,10 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
 
     if rec_error:
         if not autoencoder:
-            x_hat = X(y_hat, vars.λ, vars.A, vars.Δλ)
+            x_hat = X(y_hat)
+        if isinstance(model, ev.GeneticAlgo):
+            x_hat = X(y_hat, ev.vars.λ, ev.vars.A, ev.vars.Δλ, ev.vars.I, 
+                      ev.vars.Δn_dc, simulation=ev.vars.simulation)
         fig = plt.figure()
         plt.plot(np.mean(np.abs(x - x_hat), axis=1))
         plt.ylabel("Mean Absolute Reconstruction Error")
@@ -204,17 +208,23 @@ def plot_sweep(model, norm=True, rec_error=False, noise=None, **kwargs):
 def check_latent(model, K=10, add_center=True, add_border=False, **kwargs):
 
     autoencoder = isinstance(model, autoencoder_model)
+    evolutionary = isinstance(model, ev.GeneticAlgo)
     
     x, y = _gen_sweep(**kwargs)
 
-    x, y = normalize(x, y)
-    if autoencoder:
-        x_hat, y_hat, latent = model.batch_forward(x)
+
+    if evolutionary: 
+        y_hat = model.predict(x)
+        x_hat = X(y_hat, ev.vars.λ, ev.vars.A, ev.vars.Δλ, ev.vars.I, 
+                  ev.vars.Δn_dc, simulation=ev.vars.simulation)
     else:
-        y_hat, latent = model.batch_forward(x)
-    
-    y_hat = denormalize(y=y_hat)
-    y = denormalize(y=y)
+        x, y = normalize(x, y)
+        if autoencoder:
+            x_hat, y_hat, latent = model.batch_forward(x)
+        else:
+            y_hat, latent = model.batch_forward(x)
+        y_hat = denormalize(y=y_hat)
+        y = denormalize(y=y)
 
     MAE = np.sum(np.abs(y-y_hat), axis=1) # mean absolute error
     top_n = list(MAE.argsort()[-K:][::-1])

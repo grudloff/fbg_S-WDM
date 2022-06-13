@@ -7,6 +7,7 @@ from os import makedirs
 from os.path import join
 from json import dumps, JSONEncoder
 from datetime import datetime
+import importlib.util
 
 _module = modules[__name__]
 
@@ -52,6 +53,16 @@ def setattrs(**kwargs):
         file.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"))
         file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
         file.write('\n')
+
+def clone():
+    """ Clones variables module to keep an static copy in another module """
+    SPEC = importlib.util.find_spec(__name__)
+    module = importlib.util.module_from_spec(SPEC)
+    SPEC.loader.exec_module(module)
+    module.__name__ = "_".join((__name__, 'copy'))
+    sys.modules["_".join((__name__, 'copy'))] = module
+    module._module = modules[module.__name__]
+    return module
 
 figsize = (8, 6)
 dpi = 216

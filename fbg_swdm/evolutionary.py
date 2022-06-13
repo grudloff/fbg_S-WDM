@@ -26,6 +26,21 @@ import random
 from sklearn.mixture import GaussianMixture
 
 # ---------------------------------------------------------------------------- #
+#                               Module Management                              #
+# ---------------------------------------------------------------------------- #
+
+def clone_module(module):
+    """ Clones vars module to keep an static local copy """
+    global vars
+    vars = module.clone()
+
+# ---------------------------------------------------------------------------- #
+#                                   Constants                                  #
+# ---------------------------------------------------------------------------- #
+
+eps = np.finfo(float).eps # epsilon
+
+# ---------------------------------------------------------------------------- #
 #                                   Defaults                                   #
 # ---------------------------------------------------------------------------- #
 
@@ -63,7 +78,8 @@ class FBGDecoder(Decoder):
         super().__init__()
 
     def decode(self, genome, *args, **kwargs):
-        phenome = X(A_b=genome)
+        A_b = genome
+        phenome = X(A_b, vars.λ, vars.A, vars.Δλ, vars.I, vars.Δn_dc, simulation=vars.simulation)
         return phenome
 
     def __repr__(self):
@@ -77,7 +93,7 @@ class FBGDecoder_binary(Decoder):
 
     def decode(self, genome, *args, **kwargs):
         I, A_b = partial_decode(genome)
-        phenome = X(A_b=A_b, I=I)
+        phenome = X(A_b, vars.λ, vars.A, vars.Δλ, I, vars.Δn_dc, simulation=vars.simulation)
         return phenome
 
     def __repr__(self):
