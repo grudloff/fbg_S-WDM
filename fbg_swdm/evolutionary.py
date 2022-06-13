@@ -88,11 +88,12 @@ class FBGDecoder(Decoder):
 
 class FBGDecoder_binary(Decoder):
 
-    def __init__(self):
+    def __init__(self, B):
         super().__init__()
+        self.B = B
 
     def decode(self, genome, *args, **kwargs):
-        I, A_b = partial_decode(genome)
+        I, A_b = partial_decode(genome, self.B)
         phenome = X(A_b, vars.λ, vars.A, vars.Δλ, I, vars.Δn_dc, simulation=vars.simulation)
         return phenome
 
@@ -175,26 +176,22 @@ def update_sample(population, dist, sample_size, bounds):
 
 
 @curry
-def sort_genome(population: Iterator) -> Iterator:
+def sort_genome(population: Iterator, B: int) -> Iterator:
     """ Sort binary genome to place larger I first """
     for ind in population:
-        I_bin = next(partial_decode(ind.genome))  # decode I from genome
-        indx = np.argsort(I_bin)  # index of sorted I
+        I_float = next(partial_decode(ind.genome, B))  # decode I from genome
+        indx = np.argsort(I_float)  # index of sorted I
         if vars.I[0]>vars.I[1]: # if larger first
             indx = indx[::-1]  # invert sort
 
         # split I from A_b chromosomes
-        I_float, A_b_float = np.split(ind.genome, 2)
-        # split into chromosomes
-        I_float = np.array(np.split(I_float, vars.Q))
-        A_b_float = np.array(np.split(A_b_float, vars.Q))
+        genome = np.split(ind.genome, vars.Q)
+        I, A_b = np.split(np.array(genome), 2, axis=-1)
         # sort chromosomes according to indx
-        I_float = np.take(I_float, indx, axis=0)
-        A_b_float = np.take(A_b_float, indx, axis=0)
+        I = np.take(I, indx, axis=0)
+        A_b = np.take(A_b, indx, axis=0)
         # combine sorted chromosomes
-        I_float = np.concatenate(I_float)
-        A_b_float = np.concatenate(A_b_float)
-        ind.genome = np.concatenate((I_float, A_b_float))
+        ind.genome = np.hstack((I, A_b)).flatten()
 
         yield ind
 
@@ -292,16 +289,15 @@ def pair_compare(population, parents):
 
 def bool2float(a, B):
     """ Transforms size 10 bool to float between 0 and 1 """
-    to_float = np.exp2(np.arange(10))
+    to_float = np.exp2(np.arange(B))
     return np.dot(a, to_float)/np.sum(to_float)
 
 def partial_decode(genome, B):
     """ return I and then A_b from binary genome """
-    I_bin, A_b_bin = np.split(genome, 2)
-    I_bin = np.stack(np.split(I_bin, vars.Q))
-    I_float = bool2float(I_bin, B)*vars.I_max
+    genome = np.split(genome, vars.Q)
+    I_bin, A_b_bin = np.split(np.array(genome), 2, axis=-1)
+    I_float = vars.I_min + bool2float(I_bin, B)*(vars.I_max-vars.I_min)
     yield I_float
-    A_b_bin = np.stack(np.split(A_b_bin, vars.Q))
     A_b_float = vars.λ0 + vars.portion*(2*vars.Δ*bool2float(A_b_bin, B) - vars.Δ)
     yield A_b_float
 
@@ -457,7 +453,11 @@ class genetic_algorithm_binary(GeneticAlgo):
     def predict(self, x, verbose=False):
         parents = self.init_population(x)
         best_individual = self.loop(parents, verbose)
-        _, y_hat = partial_decode(best_individual.genome)
+        I, y_hat = partial_decode(best_individual.genome, self.B)
+        if verbose:
+            print('Best Individual:')
+            print("I = ",I)
+            print("y_hat = ",y_hat)
         return y_hat
 
     def init_population(self, x):
@@ -466,7 +466,7 @@ class genetic_algorithm_binary(GeneticAlgo):
         parents = Individual.create_population(
                                    self.pop_size,
                                    initialize=create_binary_sequence(N),
-                                   decoder=FBGDecoder_binary(),
+                                   decoder=FBGDecoder_binary(self.B),
                                    problem=self.problem
                                    )
 
