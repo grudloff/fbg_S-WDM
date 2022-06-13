@@ -13,6 +13,7 @@ from math import log
 from random import uniform
 from typing import Tuple
 from torchaudio.functional import lowpass_biquad
+from toolz import curry
 
 import fbg_swdm.simulation as sim
 import fbg_swdm.variables as vars
@@ -62,8 +63,8 @@ def load_old_model(model_class, checkpoint_path, add_hparams):
 
 # ------------------------------- Regularizers ------------------------------- #
 
-@torch.jit.script
-def weighted_l1_func(input: Tensor, sigma: float=1e-2) -> Tensor:
+@curry
+def weighted_l1(input: Tensor, sigma: float=1e-2) -> Tensor:
     # input: B, C, W tensor
     length = input.size(-1)
     x = torch.arange(length, device = input.device)/length
@@ -75,23 +76,13 @@ def weighted_l1_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     l1 = l1*weight
     return l1.mean()
 
-def weighted_l1(sigma):
-    def func(input):
-        return weighted_l1_func(input, sigma)
-    return func
-        
-@torch.jit.script
-def kl_div_func(rho: float, input: Tensor) -> Tensor:
+@curry
+def kl_div(input: Tensor, rho: float) -> Tensor:
     # kl divergence for bernulli distribution 
     # sparness constraint
     rho_hat = input.mean(0)
     dkl = - rho * torch.log(rho_hat) - (1-rho)*torch.log(1-rho_hat)
     return dkl.mean()
-
-def kl_div(rho):
-    def func(input):
-        return kl_div_func(rho, input)
-    return func
 
 @torch.jit.script
 def roughness(input: Tensor) -> Tensor:
@@ -108,8 +99,9 @@ def roughness(input: Tensor) -> Tensor:
 def null(*vars, **kwargs):
     return 0
 
-@torch.jit.script
-def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
+@curry
+def spread(input: Tensor, sigma: float=1e-2) -> Tensor:
+    """ Absolute Centra moment"""
     # input: B, C, W tensor
     length = input.size(-1)
     x = torch.arange(length, device = input.device)/length
@@ -121,13 +113,9 @@ def spread_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     spread = spread*weight
     return spread.mean()
 
-def spread(sigma):
-    def func(input):
-        return spread_func(input, sigma)
-    return func
-
-@torch.jit.script
-def kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
+@curry
+def kurt(input: Tensor, sigma: float=1e-2) -> Tensor:
+    """Fourth Central Moment"""
     length = input.size(-1)
     x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
@@ -138,13 +126,8 @@ def kurtosis_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     K = K*weight
     return K.mean()
 
-def kurtosis(sigma):
-    def func(input):
-        return kurtosis_func(input, sigma)
-    return func
-
-@torch.jit.script
-def variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
+@curry
+def variance(input: Tensor, sigma: float=1e-2) -> Tensor:
     length = input.size(-1)
     x = torch.arange(length, device = input.device)/length
     mean = torch.sum(x*input.detach(), dim=-1, keepdim=True)
@@ -154,11 +137,6 @@ def variance_func(input: Tensor, sigma: float=1e-2) -> Tensor:
     weight = F.relu(std-sigma)/std
     v = v*weight
     return v.mean()
-
-def variance(sigma):
-    def func(input):
-        return variance_func(input, sigma)
-    return func
 
 @torch.jit.script
 def l1_norm(input: Tensor) -> Tensor:
@@ -955,17 +933,17 @@ class encoder_model(base_model):
             if self.hparams.reg_type == 'l1':
                 self.reg_func = l1_norm
             elif self.hparams.reg_type == 'kl_div':
-                self.reg_func = kl_div(self.hparams.rho)
+                self.reg_func = kl_div(rho=self.hparams.rho)
             elif self.hparams.reg_type == 'spread':
-                self.reg_func = spread(self.hparams.sigma)
-            elif self.hparams.reg_type == 'kurtosis':
-                self.reg_func = kurtosis(self.hparams.sigma)
+                self.reg_func = spread(sigma=self.hparams.sigma)
+            elif self.hparams.reg_type == 'kurt':
+                self.reg_func = kurt(sigma=self.hparams.sigma)
             elif self.hparams.reg_type == 'variance':
-                self.reg_func = variance(self.hparams.sigma)
+                self.reg_func = variance(sigma=self.hparams.sigma)
             elif self.hparams.reg_type == 'weighted_l1':
-                self.reg_func = weighted_l1(self.hparams.sigma)
+                self.reg_func = weighted_l1(sigma=self.hparams.sigma)
             else:
-                raise ValueError('reg_type has to be {l1, kl_div, spread, kurtosis, variance, weighted_l1}')
+                raise ValueError('reg_type has to be {l1, kl_div, spread, kurt, variance, weighted_l1}')
 
     def loss(self, outputs, targets):
         x, y = targets
