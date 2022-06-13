@@ -115,9 +115,10 @@ def prep_dims(A_b, λ, A, Δλ, I, Δn_dc):
     return A_b, λ, A, Δλ, I, Δn_dc
 
 def R(*args, **kwargs):
-    if vars.simulation == 'gaussian':
+    simulation = kwargs.pop('simulation', vars.simulation)
+    if simulation == 'gaussian':
         return gaussian_R(*args, **kwargs)
-    elif vars.simulation == 'true':
+    elif simulation == 'true':
         return true_R(*args, **kwargs)
     else:
         raise ValueError("simulation must be in {'gaussian','true'}")
@@ -126,7 +127,7 @@ def R(*args, **kwargs):
 #                                Data Generation                               #
 # ---------------------------------------------------------------------------- #
 
-def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
+def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **kwargs):
 
     # defaults if None
     λ = vars.λ if λ is None else λ 
@@ -143,15 +144,14 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
     A_b, λ, A, Δλ, I, Δn_dc = prep_dims(A_b, λ, A, Δλ, I, Δn_dc)
 
     if vars.topology == 'parallel':
-        x = np.sum(R(A_b, λ, A, Δλ, I, Δn_dc), axis=-1)
+        x = np.sum(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs), axis=-1)
 
     elif vars.topology == 'serial_new':
         """Serial topology matrix simulation, no incoherent interface between FBGs"""
 
         T_prev = np.identity(2)
- 
-        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
-            T = transferMatrix(b.T, np.squeeze(λ), l.T ,s.T, δn.T)
+
+        for T in np.rollaxis(transferMatrix(A_b, λ, A, Δλ, I, Δn_dc)):
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
@@ -168,8 +168,7 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
         L = 10000 # batch_size
         T_prev = np.identity(2)
         i = 1 # fbg number
-        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
-            T = transferMatrix(b.T, np.squeeze(λ), l.T, s.T, δn.T)
+        for T in np.rollaxis(transferMatrix(A_b, λ, A, Δλ, I, Δn_dc)):
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
@@ -204,8 +203,7 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
 
         T_prev = np.identity(2)
         i = 1 # fbg number
-        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
-            T = transferMatrix(b.T, np.squeeze(λ), l.T, s.T, δn.T)
+        for T in np.rollaxis(transferMatrix(A_b, λ, A, Δλ, I, Δn_dc)):
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
@@ -230,8 +228,7 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
         
         T_prev = np.identity(2)
 
-        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
-            r = R(b.T, np.squeeze(λ), 1, l.T, s.T, δn.T)
+        for r in np.rollaxis(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs)):
             t = 1-r
 
             T = 1/t[None,None,:] \
@@ -251,16 +248,14 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None):
     elif vars.topology == 'serial':
         """Old, only valid for 2-FBGs"""
         x = 0
-        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
-            x_next = R(b.T, np.squeeze(λ), a, l.T, s.T, δn.T)
+        for x_next in np.rollaxis(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs), -1):
             x = x + (1-x)**2*x_next/(1-x_next*x)
 
     elif vars.topology == 'serial_rec':
         """Recurrent equivalent of serial_abs """
         r = 0
         t = 1
-        for b, a, l, s, δn in zip(A_b.T, A.T, Δλ.T, I.T, Δn_dc.T):
-            r_next = R(b.T, np.squeeze(λ), 1, l.T, s.T, δn.T)
+        for r_next in np.rollaxis(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs), -1):
             t_next = 1 - r_next
             F = 1/(1 - a*r*r_next) # resonance
             r = r + a*r_next*t**2*F
