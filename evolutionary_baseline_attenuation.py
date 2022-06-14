@@ -7,6 +7,7 @@ import fbg_swdm.variables as vars
 vars.set_base_dir('C:\\Users\\parac\\Desktop\\Gabriel\\Experimentos')
 
 ev.clone_module(vars)
+Q = 2
 ev.vars.setattrs(
     exp_name = 'baseline',
     Q = Q,
@@ -36,7 +37,7 @@ if __name__ == '__main__':
         'genetic_real' : ev.genetic_algorithm_real(pop_size=150, max_generation=500, std=1*vars.n, patience=50, swap=True),
         'swap_diff' : ev.swap_differential_evolution(),
         'distributed_estimation' : ev.DistributedEstimation(pop_size=200, top_size=50, patience=50),
-        'DMS_particle_swarm' : ev.dynamic_multi_swarm_particle_swarm_optimization(vel_init='gaussian', max_plateau=50)
+        'DMS_particle_swarm' : ev.dynamic_multi_swarm_particle_swarm_optimization(vel_init='gaussian', patience=50)
     }
 
     for model_name, model in model_dict.items():
