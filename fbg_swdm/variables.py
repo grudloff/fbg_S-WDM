@@ -16,6 +16,7 @@ base_dir = ''
 exp_name = 'base_exp'
 exp_dir = join(base_dir, exp_name)
 tag = None
+multiprocessing = False
 
 class NumpyEncoder(JSONEncoder):
     def default(self, obj):

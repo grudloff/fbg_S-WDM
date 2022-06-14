@@ -25,6 +25,8 @@ import random
 
 from sklearn.mixture import GaussianMixture
 
+from concurrent.futures import ProcessPoolExecutor
+
 # ---------------------------------------------------------------------------- #
 #                               Module Management                              #
 # ---------------------------------------------------------------------------- #
@@ -358,8 +360,24 @@ class GeneticAlgo():
 
         self.problem = FBGProblem()
 
-    @stack
     def predict(self, x, verbose=False):
+            shape = x.shape
+            if len(shape) == 1:
+                return self.predict_func(x, verbose)
+            elif vars.multiprocessing:
+                with ProcessPoolExecutor() as executor:
+                    results = executor.map(self.predict_func, x)
+                    Y_hat = np.empty((shape[0], vars.Q))
+                    for i, y_hat in zip(range(shape[0]), results):
+                        Y_hat[i] = y_hat
+                return Y_hat
+            else:
+                Y_hat = np.empty((shape[0], vars.Q))
+                for i, k in enumerate(x):
+                    Y_hat[i] = self.predict_func(k, verbose)
+                return Y_hat
+
+    def predict_func(self, x, verbose=False):
         parents = self.init_population(x)
         best_individual = self.loop(parents, verbose)
         return best_individual.genome
@@ -449,8 +467,7 @@ class genetic_algorithm_binary(GeneticAlgo):
                                              parents=parents)
                     )
 
-    @stack
-    def predict(self, x, verbose=False):
+    def predict_func(self, x, verbose=False):
         parents = self.init_population(x)
         best_individual = self.loop(parents, verbose)
         I, y_hat = partial_decode(best_individual.genome, self.B)
@@ -529,8 +546,7 @@ class DistributedEstimation(GeneticAlgo):
                                                 parents=parents)
                     )
 
-    @stack
-    def predict(self, x, verbose=False):
+    def predict_func(self, x, verbose=False):
         bounds = ((self.bounds, ) * self.Q)  # repeat bounds for each FBG
         self.problem.set(x)
         parents = Individual.create_population(
@@ -618,8 +634,7 @@ class particle_swarm_optimization(GeneticAlgo):
             raise ValueError('vel_init must be one of {"gaussian", "uniform", "zeros"}')
         return velocities
 
-    @stack
-    def predict(self, x, verbose=False):
+    def predict_func(self, x, verbose=False):
         parents = self.init_population(x)
 
         self.current_subpopulation = 0
@@ -705,8 +720,7 @@ class dynamic_multi_swarm_particle_swarm_optimization(particle_swarm_optimizatio
         """ get size for velocities initialization"""
         return self.swarms, self.pop_size, vars.Q
 
-    @stack
-    def predict(self, x, verbose=False):
+    def predict_func(self, x, verbose=False):
         subpopulations = self.init_population(x)
         
         # best historical instance for each individual in each subpopulation
