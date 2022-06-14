@@ -17,6 +17,7 @@ exp_name = 'base_exp'
 exp_dir = join(base_dir, exp_name)
 tag = None
 multiprocessing = False
+print_log = False
 
 class NumpyEncoder(JSONEncoder):
     def default(self, obj):
@@ -28,6 +29,15 @@ def set_base_dir(dir):
     # Set dir as base directory
     global base_dir
     base_dir = dir
+
+def log(*args):
+    global print_log
+    with open(exp_dir+'\\log.txt','a', encoding="utf-8") as file:
+        for string in args:
+            if print_log:
+                print(string)
+            file.write(string)
+        file.write('\n')
 
 def setattrs(**kwargs):
     """Set multiple attributes of module from dictionary"""
@@ -61,11 +71,9 @@ def setattrs(**kwargs):
         bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
     if mode_properties_flag:
         set_mode_properties()
-
-    with open(exp_dir+'\\log.txt','a', encoding="utf-8") as file:
-        file.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"))
-        file.write(dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
-        file.write('\n')
+    
+    log(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"),
+        dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
 
 def clone():
     """ Clones variables module to keep an static copy in another module """
