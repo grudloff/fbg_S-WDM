@@ -365,7 +365,8 @@ class GeneticAlgo():
             if len(shape) == 1:
                 return self.predict_func(x, verbose)
             elif vars.multiprocessing:
-                with ProcessPoolExecutor() as executor:
+                max_workers = None if vars.multiprocessing is True else vars.multiprocessing
+                with ProcessPoolExecutor(max_workers) as executor:
                     results = executor.map(self.predict_func, x)
                     Y_hat = np.empty((shape[0], vars.Q))
                     for i, y_hat in zip(range(shape[0]), results):
