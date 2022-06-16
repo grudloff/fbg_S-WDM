@@ -366,6 +366,7 @@ class GeneticAlgo():
                 return self.predict_func(x, verbose)
             elif vars.multiprocessing:
                 with WorkerPool(n_jobs=vars.multiprocessing) as pool:
+                    x = list(np.split(x, x.shape[0]))
                     Y_hat = pool.map(self.predict_func, x, progress_bar=True)
                 return Y_hat
             else:
