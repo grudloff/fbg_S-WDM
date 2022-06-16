@@ -44,6 +44,7 @@ def setattrs(**kwargs):
     mode_properties_flag = False
     Q_flag = False
     portion_flag = False
+    should_log = kwargs.pop('log', True)
     for k, v in kwargs.items():
         setattr(_module, k, v)
         if k == 'exp_name':
@@ -72,8 +73,9 @@ def setattrs(**kwargs):
     if mode_properties_flag:
         set_mode_properties()
     
-    log(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"),
-        dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
+    if should_log:
+        log(datetime.now().strftime("%d/%m/%Y %H:%M:%S\n"),
+            dumps(kwargs, indent=4, ensure_ascii=False, cls=NumpyEncoder))
 
 def clone():
     """ Clones variables module to keep an static copy in another module """

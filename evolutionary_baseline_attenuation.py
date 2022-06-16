@@ -6,6 +6,9 @@ import fbg_swdm.evolutionary as ev
 import fbg_swdm.variables as vars
 vars.set_base_dir('C:\\Users\\parac\\Desktop\\Gabriel\\Experimentos')
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 ev.clone_module(vars)
 Q = 2
 ev.vars.setattrs(
@@ -16,7 +19,8 @@ ev.vars.setattrs(
     I = np.array([0.5, 0.9]),
     N = 2000,
     topology = 'serial',
-    multiprocessing=True
+    multiprocessing=True,
+    log = False
 )
 
 Q = 2
@@ -27,7 +31,8 @@ vars.setattrs(
     Δλ = np.array([0.2*vars.n]*Q),
     I = np.array([0.5, 0.9]),
     N = 2000,
-    topology = 'serial'
+    topology = 'serial',
+    log = False
 )
 
 if __name__ == '__main__':

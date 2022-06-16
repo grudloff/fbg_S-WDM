@@ -25,7 +25,7 @@ import random
 
 from sklearn.mixture import GaussianMixture
 
-from concurrent.futures import ProcessPoolExecutor
+from mpire import WorkerPool
 
 # ---------------------------------------------------------------------------- #
 #                               Module Management                              #
@@ -365,11 +365,8 @@ class GeneticAlgo():
             if len(shape) == 1:
                 return self.predict_func(x, verbose)
             elif vars.multiprocessing:
-                with ProcessPoolExecutor() as executor:
-                    results = executor.map(self.predict_func, x)
-                    Y_hat = np.empty((shape[0], vars.Q))
-                    for i, y_hat in zip(range(shape[0]), results):
-                        Y_hat[i] = y_hat
+                with WorkerPool(n_jobs=vars.multiprocessing) as pool:
+                    Y_hat = pool.map(self.predict_func, x, progress_bar=True)
                 return Y_hat
             else:
                 Y_hat = np.empty((shape[0], vars.Q))

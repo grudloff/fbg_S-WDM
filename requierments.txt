@@ -4,4 +4,6 @@ scikit-learn
 leap_ec
 lssvr
 pytorch
+pytorch-lightning
 optuna
+mpire
