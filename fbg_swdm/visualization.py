@@ -303,7 +303,7 @@ def error_snr(model, norm=None, min_snr=0, max_snr = 40, M=10, split=True, N=300
 
     if split:
         save_file = "_".join((save_file, 'split'))
-        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(Q)])
+        group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(vars.Q)])
         plt.ylabel('Absolute Error [pm]')
         plt.xlabel('SNR [dB]')
         plt.yscale('log')
