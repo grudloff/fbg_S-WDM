@@ -709,8 +709,8 @@ class dynamic_multi_swarm_particle_swarm_optimization(particle_swarm_optimizatio
     def __init__(self, pop_size=None, max_generation=1000, Q=None,
                  threshold=0.1, bounds=None, w=0.6, pa=2, ga=2, lr=0.1,
                  swarms=None, migration_gap=5, vel_init='gaussian', patience=200):
-        pop_size = dms_pso_defaults[0][vars.Q] if pop_size is None else pop_size
-        swarms = dms_pso_defaults[1][vars.Q] if swarms is None else swarms
+        pop_size = dms_pso_defaults[0][vars.Q-1] if pop_size is None else pop_size
+        swarms = dms_pso_defaults[1][vars.Q-1] if swarms is None else swarms
         super().__init__(pop_size, max_generation, Q,
                  threshold, bounds, w, pa, ga,
                  lr, vel_init, patience)
