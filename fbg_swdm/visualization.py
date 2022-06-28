@@ -320,3 +320,48 @@ def group_box_plot(x, y, labels, title=None):
                 for i in range(Q)], ignore_index=True)
     boxplot(data=df, x='x', y='y', hue='label')
     plt.legend(title=title, loc='upper right', frameon=False)
+
+def compare_finetune_snr(exp_name=None):
+
+    # Train
+    if exp_name is not None:
+        exp_name = exp_name
+    else:
+        exp_name = vars.exp_name.replace('_finetune', '')
+        exp_name = exp_name.replace('auto', '')
+    exp_dir = join(vars.base_dir, exp_name)
+    pretest_tag = None
+    save_file = join(exp_dir, 
+                    "_".join(filter(None, (exp_name, 'error_snr', pretest_tag))))
+    with np.load(save_file+'.npz') as f:
+        db_vect = f['db_vect']
+        error_vect = f['error_vect']
+    x = db_vect
+    y = np.mean(error_vect, axis=-1, keepdims=True)
+
+    # Pre-Finetune
+    pretest_tag = 'pretest'
+    save_file = join(vars.exp_dir, 
+                    "_".join(filter(None, (vars.exp_name, vars.tag, 'error_snr', pretest_tag))))
+    with np.load(save_file+'.npz') as f:
+        db_vect = f['db_vect']
+        error_vect = f['error_vect']
+    y = np.concatenate((y, np.mean(error_vect, axis=-1, keepdims=True)), axis=-1) 
+
+    # Finetune
+    pretest_tag = None
+    save_file = join(vars.exp_dir, 
+                    "_".join(filter(None, (vars.exp_name, vars.tag, 'error_snr', pretest_tag))))
+    with np.load(save_file+'.npz') as f:
+        db_vect = f['db_vect']
+        error_vect = f['error_vect']
+    y = np.concatenate((y, np.mean(error_vect, axis=-1, keepdims=True)), axis=-1) 
+
+    labels = ["Train", "Pre-Finetune", "Finetune"]
+    title = 'Model'
+    group_box_plot(x, y, labels, title)
+    plt.ylabel('Absolute Error [pm]')
+    plt.xlabel('SNR [dB]')
+    plt.yscale('log')
+    save_file = join(vars.exp_dir, "_".join(filter(None, (vars.exp_name, vars.tag, 'compare'))))
+    plt.savefig(save_file+'.pdf', bbox_inches='tight')
