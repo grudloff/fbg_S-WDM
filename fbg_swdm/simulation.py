@@ -160,7 +160,8 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **k
 
         T_prev = np.identity(2)
 
-        for T in np.rollaxis(transferMatrix(A_b, λ, A, Δλ, I, Δn_dc)):
+        for a, T in zip(A.T, np.rollaxis(transferMatrix(A_b, λ, Δλ, I, 
+                                                      Δn_dc, **kwargs), -1)):
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
@@ -177,7 +178,8 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **k
         L = 10000 # batch_size
         T_prev = np.identity(2)
         i = 1 # fbg number
-        for T in np.rollaxis(transferMatrix(A_b, λ, A, Δλ, I, Δn_dc)):
+        for a, T in zip(A.T, np.rollaxis(transferMatrix(A_b, λ, Δλ, I, 
+                                                      Δn_dc, **kwargs), -1)):
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
@@ -212,7 +214,8 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **k
 
         T_prev = np.identity(2)
         i = 1 # fbg number
-        for T in np.rollaxis(transferMatrix(A_b, λ, A, Δλ, I, Δn_dc)):
+        for a, T in zip(A.T, np.rollaxis(transferMatrix(A_b, λ, Δλ, I, 
+                                                      Δn_dc, **kwargs), -1)):
 
             # atenuation
             At = np.diag([a**(-1.0/4), a**(1.0/4)])
@@ -237,7 +240,8 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **k
         
         T_prev = np.identity(2)
 
-        for r in np.rollaxis(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs)):
+        for a, r_next in zip(A.T, np.rollaxis(R(A_b, λ, np.ones(vars.Q), 
+                                              Δλ, I, Δn_dc, **kwargs), -1)):
             t = 1-r
 
             T = 1/t[None,None,:] \
@@ -264,7 +268,8 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **k
         """Recurrent equivalent of serial_abs """
         r = 0
         t = 1
-        for r_next in np.rollaxis(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs), -1):
+        for a, r_next in zip(A.T, np.rollaxis(R(A_b, λ, np.ones(vars.Q), 
+                                              Δλ, I, Δn_dc, **kwargs), -1)):
             t_next = 1 - r_next
             F = 1/(1 - a*r*r_next) # resonance
             r = r + a*r_next*t**2*F
