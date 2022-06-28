@@ -217,18 +217,9 @@ def get_kernel_sizes(n_layers, target, verbose=False):
 def transpose_conv_init(model):
     A_b = np.array([vars.λ0]*vars.Q)
     λ = np.linspace(vars.λ0 - vars.Δ, vars.λ0 + vars.Δ, vars.N+1)
-    A=np.array([1]*vars.Q) # no attenuation
-    Δλ=vars.Δλ
-    I=vars.I
-    Δn_dc=vars.Δn_dc
-    A_b = A_b[:, None]
-    λ = λ[None, :]
-    A = A[:, None]
-    Δλ = Δλ[:, None]
-    I = I[:, None]
-    Δn_dc = Δn_dc[:, None]
-    data = sim.R(λb=A_b, λ=λ, A=A, Δλ=Δλ, I=I, Δn_dc=Δn_dc)
-    data = data[:, None, :]
+    # TODO: add simulation
+    data = sim.R(*sim.prep_dims(A_b, λ, vars.A, vars.Δλ, vars.I, vars.Δn_dc), simulation=vars.simulation)
+    data = data.T[:, None, :]
     transpose_conv = model.decoder.transpose_conv
     with torch.no_grad():
         if transpose_conv.parametrizations:
