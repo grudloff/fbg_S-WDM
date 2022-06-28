@@ -56,6 +56,7 @@ def setattrs(**kwargs):
             λ = np.linspace(λ0 - Δ, λ0 + Δ, N)
         elif k =='Q':
             Q_flag = True
+            mode_properties_flag = True
         elif k == 'portion':
             portion_flag = True
         elif k in ['λ0', 'a', 'n1', 'n2', 'I']:
