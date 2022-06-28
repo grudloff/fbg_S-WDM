@@ -27,11 +27,11 @@ def plot_datapoint(x, y, N_datapoint = None):
     fig, ax = plt.subplots()
     plt.title("Datapoint visualization")
     ax.plot(vars.λ/vars.n, x, label="$x$")
-    if vars.topology == 'serial':
-        A = np.cumprod(vars.A)
-    else:
+    if vars.topology == 'parallel':
         A = vars.A
-    A_b, λ, A, Δλ, I, Δn_dc = prep_dims(y, vars.λ, vars.A, vars.Δλ, vars.I, vars.Δn_dc)
+    else:
+        A = np.cumprod(vars.A)
+    A_b, λ, A, Δλ, I, Δn_dc = prep_dims(y, vars.λ, A, vars.Δλ, vars.I, vars.Δn_dc)
     with color_palette(n_colors=vars.Q):
         ax.plot(vars.λ/vars.n, R(A_b, λ, A, Δλ, I, Δn_dc),
                     linestyle='--',
