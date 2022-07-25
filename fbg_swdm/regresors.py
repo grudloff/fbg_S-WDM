@@ -6,6 +6,8 @@ from sklearn.gaussian_process.kernels import RBF
 from sklearn.base import BaseEstimator, RegressorMixin
 
 from lssvr import LSSVR
+from scipy.linalg import lstsq
+from scipy.special import expit as sigmoid
 from sklearn.utils import check_X_y, check_array
 
 
@@ -35,12 +37,9 @@ class ELM(BaseEstimator, RegressorMixin):
     def __init__(self, hidden_size=10):
         self.hidden_size = hidden_size
 
-    def _sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
-
     def _hidden_nodes(self, X):
         h = np.dot(X, self.input_weights_) + self.biases_
-        H = self._sigmoid(h)
+        H = sigmoid(h)
         return H
 
     def predict(self, X):
@@ -82,8 +81,10 @@ class ELM(BaseEstimator, RegressorMixin):
         self.biases_ = np.random.rand(self.hidden_size)
 
         H = self._hidden_nodes(X)
-        H_pinv = np.linalg.pinv(H) # pseudo-inverse
-        self.output_weights_ = np.dot(H_pinv, y)
+        try:
+            self.output_weights_ = lstsq(H, y)[0]
+        except:
+            self.output_weights_ = lstsq(H, y, lapack_driver='gelss')[0]
         return self
 
 
