@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from fbg_swdm.variables import figsize, n, p, λ, Δλ, A, λ0, Δ, Q
+from fbg_swdm.variables import n, p, λ, Δλ, A, λ0, Δ, Q
 import fbg_swdm.variables as vars
 plt.rcParams['figure.figsize'] = vars.figsize
 plt.rcParams['figure.dpi'] = vars.dpi
@@ -295,6 +295,7 @@ def error_snr(model, norm=None, min_snr=0, max_snr = 40, M=10, split=True, N=300
     db_vect = np.trunc(db_vect*10)/10
 
     error_vect_total = np.mean(error_vect, axis=-1)
+    plt.figure()
     boxplot(x=np.repeat(db_vect, N), y=error_vect_total.flatten(), color='#1f77b4')
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('SNR [dB]')
@@ -321,7 +322,7 @@ def group_box_plot(x, y, labels, title=None):
     boxplot(data=df, x='x', y='y', hue='label')
     plt.legend(title=title, loc='upper right', frameon=False)
 
-def compare_finetune_snr(exp_name=None):
+def compare_finetune_snr(exp_name=None, finetune=None):
 
     # Train
     if exp_name is not None:
@@ -329,6 +330,8 @@ def compare_finetune_snr(exp_name=None):
     else:
         exp_name = vars.exp_name.replace('_finetune', '')
         exp_name = exp_name.replace('auto', '')
+        if finetune is not None:
+            exp_name = exp_name.replace("_"+finetune, '')
     exp_dir = join(vars.base_dir, exp_name)
     pretest_tag = None
     save_file = join(exp_dir, 
@@ -339,10 +342,12 @@ def compare_finetune_snr(exp_name=None):
     x = db_vect
     y = np.mean(error_vect, axis=-1, keepdims=True)
 
+    tag = None if finetune is not None else vars.tag
+
     # Pre-Finetune
     pretest_tag = 'pretest'
     save_file = join(vars.exp_dir, 
-                    "_".join(filter(None, (vars.exp_name, vars.tag, 'error_snr', pretest_tag))))
+                    "_".join(filter(None, (vars.exp_name, tag, 'error_snr', pretest_tag))))
     with np.load(save_file+'.npz') as f:
         db_vect = f['db_vect']
         error_vect = f['error_vect']
@@ -351,7 +356,7 @@ def compare_finetune_snr(exp_name=None):
     # Finetune
     pretest_tag = None
     save_file = join(vars.exp_dir, 
-                    "_".join(filter(None, (vars.exp_name, vars.tag, 'error_snr', pretest_tag))))
+                    "_".join(filter(None, (vars.exp_name, tag, 'error_snr', pretest_tag))))
     with np.load(save_file+'.npz') as f:
         db_vect = f['db_vect']
         error_vect = f['error_vect']
@@ -363,5 +368,85 @@ def compare_finetune_snr(exp_name=None):
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('SNR [dB]')
     plt.yscale('log')
-    save_file = join(vars.exp_dir, "_".join(filter(None, (vars.exp_name, vars.tag, 'compare'))))
+    save_file = join(vars.exp_dir, "_".join(filter(None, (vars.exp_name, tag, 'compare'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
+
+def compare_snr(tags=None , db_id=[4,-1], list_id=None, labels=None, compare=False, compare_label=None, filename=None):
+
+    tags = vars.baseline_tags if tags is None else tags
+    labels = vars.baseline_labels if labels is None else labels
+    filename = "_".join(filter(None, (vars.exp_name, 'compare'))) if filename is None else filename
+
+    if list_id is not None:
+        tags = [tags[id] for id in list_id]
+        labels = [labels[id] for id in list_id]
+
+    if compare:
+        exp_dir = join(vars.base_dir, compare)
+        save_file = join(exp_dir, 
+                "_".join(filter(None, (compare, vars.tag, 'error_snr'))))
+        with np.load(save_file+'.npz') as f:
+            x = f['db_vect']
+            error_vect = f['error_vect']
+            error_vect = error_vect[db_id]
+            error_vect = np.mean(error_vect, axis=-1, keepdims=True)
+            try:
+                y = np.concatenate((y, error_vect), axis=-1) 
+            except UnboundLocalError:
+                y = error_vect
+        labels = [compare_label] + labels
+
+
+    for tag in tags:
+        save_file = join(vars.exp_dir, 
+                     "_".join(filter(None, (vars.exp_name, tag, 'error_snr'))))
+        with np.load(save_file+'.npz') as f:
+            x = f['db_vect']
+            error_vect = f['error_vect']
+            error_vect = error_vect[db_id]
+            error_vect = np.mean(error_vect, axis=-1, keepdims=True)
+            try:
+                y = np.concatenate((y, error_vect), axis=-1) 
+            except UnboundLocalError:
+                y = error_vect
+
+    x = x[db_id]
+    title = 'Model'
+    group_box_plot(x, y, labels, title)
+    plt.ylabel('Absolute Error [pm]')
+    plt.xlabel('SNR [dB]')
+    plt.yscale('log')
+    save_file = join(vars.base_dir, filename)
+    plt.legend(bbox_to_anchor=(1.02, 0.5), loc='center left', borderaxespad=0, frameon=False)
+    plt.savefig(save_file+'.pdf', bbox_inches='tight')
+
+def print_snr(tags=None , list_id=None, labels=None):
+
+    tags = vars.baseline_tags if tags is None else tags
+
+    if list_id is not None:
+        tags = [tags[id] for id in list_id]
+
+    for tag in tags:
+        save_file = join(vars.exp_dir, 
+                     "_".join(filter(None, (vars.exp_name, tag, 'error_snr'))))
+        with np.load(save_file+'.npz') as f:
+            db_vect = f['db_vect']
+            error_vect = f['error_vect']
+
+            plt.figure()
+            group_box_plot(db_vect, error_vect, labels=["$FBG_{}$".format(i+1) for i in range(vars.Q)])
+            
+            plt.ylabel('Absolute Error [pm]')
+            plt.xlabel('SNR [dB]')
+            plt.yscale('log')
+            plt.savefig(save_file+'_split.pdf', bbox_inches='tight')
+
+            error_vect = np.mean(error_vect, axis=-1, keepdims=True)
+            plt.figure()
+            N = error_vect.shape[1]
+            boxplot(x=np.repeat(db_vect, N), y=error_vect.flatten(), color='#1f77b4')
+            plt.ylabel('Absolute Error [pm]')
+            plt.xlabel('SNR [dB]')
+            plt.yscale('log')
+            plt.savefig(save_file+'.pdf', bbox_inches='tight')
