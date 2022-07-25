@@ -12,6 +12,39 @@ import importlib.util
 
 _module = modules[__name__]
 
+ea_tags = [
+    'genetic_binary',
+    'genetic_real',
+    'distributed_estimation',
+    'swap_diff',
+    'DMS_particle_swarm'
+]
+
+reg_tags = [
+    'lookuptable',
+    'elm',
+    'ls_svm'
+]
+
+baseline_tags = ea_tags + reg_tags
+
+ea_labels = [
+    'GA Binary',
+    'GA Real',
+    'DEA',
+    'SDE',
+    'DMS PSO'
+]
+
+reg_labels = [
+    'Lookuptable',
+    'ELM',
+    'LS-SVR'
+]
+
+baseline_labels = ea_labels + reg_labels
+
+
 base_dir = ''
 exp_name = 'base_exp'
 exp_dir = join(base_dir, exp_name)
