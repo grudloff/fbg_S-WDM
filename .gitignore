@@ -10,3 +10,6 @@
 *.ipynb
 *.ckpt
 *.p
+/baselines
+*.pdf
+generate_latex_images.py
