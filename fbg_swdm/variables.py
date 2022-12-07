@@ -211,7 +211,7 @@ except ModuleNotFoundError:
         # normalized frequency LP01
         b = (1.1428-0.9960/V)**2
         if V<1:
-            raise WarningMessage("Core power fraction approximation isn't valid for V<1")
+            warnings.warn("Core power fraction approximation isn't valid for V<1")
         # power fraction in core
         η = 1-1/V**2
         # effective refractive index
