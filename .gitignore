@@ -13,3 +13,4 @@
 /baselines
 *.pdf
 generate_latex_images.py
+default_base_dir.txt
