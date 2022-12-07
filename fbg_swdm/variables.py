@@ -44,8 +44,13 @@ reg_labels = [
 
 baseline_labels = ea_labels + reg_labels
 
-
-base_dir = ''
+try:
+    base_dir = open("default_base_dir.txt", "r").readlines()[0]
+except FileNotFoundError:
+    base_dir = ''
+    warnings.warn("""Current folder was defined as base directory. Create
+                    a 'default_base_dir.txt' file containing desired default
+                    or call set_base_dir""")
 exp_name = 'base_exp'
 exp_dir = join(base_dir, exp_name)
 tag = None
