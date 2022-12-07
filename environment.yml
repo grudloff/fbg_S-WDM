@@ -1,0 +1,29 @@
+name: fbg_swdm
+
+channels:
+  - nvidia
+  - pytorch
+  - conda-forge
+
+dependencies:
+  - python=3.9
+  - pytorch
+  - torchvision
+  - torchaudio 
+  - pytorch-cuda=11.7
+  - pytorch-lightning
+  - matplotlib
+  - seaborn
+  - numpy
+  - scipy
+  - scikit-learn
+  - scikit-optimize
+  - jupyter
+  - ipykernel
+  - pandas
+  - ipympl
+  - pip
+  - pip:
+    - leap_ec
+    - ofiber
+    - lssvr
