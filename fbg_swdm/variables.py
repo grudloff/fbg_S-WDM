@@ -1,4 +1,4 @@
-from warnings import WarningMessage
+import warnings
 import numpy as np
 from math import pi as π
 from math import sqrt
