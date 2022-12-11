@@ -1,22 +1,24 @@
 
-from torch import nn, cat, linspace, tensor, sigmoid
-import torch.nn.functional as F
-from torch.utils.data import TensorDataset, DataLoader
-from torch.optim import Adam, SGD, AdamW
-from torch.optim.lr_scheduler import OneCycleLR, ReduceLROnPlateau
-import torch
-from torch import Tensor
-import torch.nn.utils.parametrize as parametrize
-import pytorch_lightning as pl
-import numpy as np
 from math import log
 from random import uniform
 from typing import Tuple
-from torchaudio.functional import lowpass_biquad
+
+import numpy as np
+import pytorch_lightning as pl
+import torch
+import torch.nn.functional as F
+import torch.nn.utils.parametrize as parametrize
 from toolz import curry
+from torch import Tensor, cat, linspace, nn, sigmoid, tensor
+from torch.optim import SGD, Adam, AdamW
+from torch.optim.lr_scheduler import OneCycleLR, ReduceLROnPlateau
+from torch.utils.data import DataLoader, TensorDataset
+from torchaudio.functional import lowpass_biquad, filtfilt
+from scipy.signal import butter
+
 
 import fbg_swdm.simulation as sim
-import fbg_swdm.variables as vars
+import fbg_swdm.variables as config
 
 # ---------------------------- Model Loading Utils --------------------------- #
 
@@ -96,12 +98,12 @@ def roughness(input: Tensor) -> Tensor:
     roughness = norm_diff.diff()**2
     return roughness.mean()
 
-def null(*vars, **kwargs):
+def nullFunc(*vars, **kwargs):
     return 0
 
 @curry
 def spread(input: Tensor, sigma: float=1e-2) -> Tensor:
-    """ Absolute Centra moment"""
+    """ Absolute Central moment"""
     # input: B, C, W tensor
     length = input.size(-1)
     x = torch.arange(length, device = input.device)/length
@@ -168,7 +170,7 @@ def test_kernel(vect):
 def get_kernel_sizes(n_layers, target, verbose=False):
     # if target is in nm
     if isinstance(target, float):
-        target = int(target*vars.N/(vars.Δ*2)*vars.n)
+        target = int(target*config.N/(config.Δ*2)*config.n)
 
     # init all kernels in 3 for each layer
     kernel_vect = [3]*n_layers
@@ -211,31 +213,66 @@ def get_kernel_sizes(n_layers, target, verbose=False):
                 best_kernel_vect = kernel_vect.copy()
                 best_receptive_field = receptive_field
 
+# TODO: maybe move somewhere else?
+class NullLoss(nn.Module):
+    def forward(self, pred, actual):
+        return 0
+
+class MaskedLoss(nn.Module):
+    def __init__(self, Loss):
+        super().__init__()
+        self.loss = Loss()
+        
+    def forward(self, pred, actual):
+        mask = ~actual.isnan()
+        return self.loss(pred[mask], actual[mask])
 
 # ------------------------------ Initialization ------------------------------ #
 
-def transpose_conv_init(model):
-    A_b = np.array([vars.λ0]*vars.Q)
-    λ = np.linspace(vars.λ0 - vars.Δ, vars.λ0 + vars.Δ, vars.N+1)
-    # TODO: add simulation
-    data = sim.R(*sim.prep_dims(A_b, λ, vars.A, vars.Δλ, vars.I, vars.Δn_dc), simulation=vars.simulation)
+def transpose_conv_init(model, data=None, simulation=None):
+    if data is None:
+        A_b = np.array([config.λ0]*config.Q)
+        λ = np.linspace(config.λ0 - config.Δ, config.λ0 + config.Δ, config.N+1)
+        if simulation is None:
+            simulation = config.simulation
+        data = sim.R(*sim.prep_dims(A_b, λ, config.A, config.Δλ, config.I, config.Δn_dc), simulation=simulation)
     data = data.T[:, None, :]
     transpose_conv = model.decoder.transpose_conv
     with torch.no_grad():
-        if transpose_conv.parametrizations:
-            transpose_conv.weight = tensor(data, dtype=model.dtype, device=model.device)
-        else:
+        try:
+            if transpose_conv.parametrizations:
+                transpose_conv.weight = tensor(data, dtype=model.dtype, device=model.device)
+            else:
+                transpose_conv.weight= nn.Parameter(tensor(data, dtype=model.dtype, device=model.device))
+        except AttributeError:
             transpose_conv.weight= nn.Parameter(tensor(data, dtype=model.dtype, device=model.device))
 
 def attenuation_init(model, A=None):
-    if not A:
-        A = vars.A
+    if A is None:
+        A = config.A
     with torch.no_grad():
         if model.decoder.parametrizations.A:
             model.decoder.A = tensor(A, dtype=model.dtype, device=model.device)
         else:
             model.decoder.A = nn.Parameter(tensor(A, dtype=model.dtype, device=model.device))
 
+def init_gaussian_inverse(module, sigma, kernel_size, N, Q):
+    snr = 1e2
+    def gaussian(x, mu, sigma):
+        return 1./(np.sqrt(2.*torch.pi)*sigma)*torch.exp(-torch.pow((x - mu)/sigma, 2.)/2)
+    x = torch.arange(kernel_size, dtype=torch.float64)
+    y_tilde = gaussian(x, kernel_size//2+1, N*sigma)
+    Y = torch.fft.fft(y_tilde)
+    Z = 1/(Y)*(1/(1+1/(torch.abs(Y)**2*snr)))
+    z = torch.fft.ifft(Z)
+    if module.gaussian_deconv.weight.dtype is torch.float32:
+        z = z.type(torch.complex64)
+    elif module.gaussian_deconv.weight.dtype is torch.float64:
+        z = z.type(torch.complex128)
+    z = z.view(1,1,-1)
+    z = z.repeat(Q, 1, 1)
+    with torch.no_grad():
+        module.gaussian_deconv.weight = nn.Parameter(z)
 
 # ------------------------------- Augmentation ------------------------------- #
 
@@ -246,7 +283,7 @@ def batch_shift(batch: Tuple[Tensor, Tensor], n: int) -> Tuple[Tensor, Tensor]:
     x, y = batch 
     shifts = torch.arange(n, device=x.device)-n//2
     x = torch.cat([torch.roll(x, int(s)) if s else x for s in shifts], dim=0)
-    y = y[None, ...] + vars.Δ/vars.N*shifts[..., None, None] #add shift on first dimension
+    y = y[None, ...] + config.Δ/config.N*shifts[..., None, None] #add shift on first dimension
     y = y.reshape(-1, y.size(-1)) # concat new dim along the first dimension
     batch = x, y
     return batch
@@ -255,7 +292,10 @@ def batch_shift(batch: Tuple[Tensor, Tensor], n: int) -> Tuple[Tensor, Tensor]:
     
 
 class SigmoidStraightThrough(torch.autograd.Function):
+    """ Sigmoid function with natural gradient. By setting the backward pass
+        to identity. 
 
+    """
     @staticmethod
     def forward(ctx, u):
         return sigmoid(u)
@@ -267,8 +307,40 @@ class SigmoidStraightThrough(torch.autograd.Function):
 def sigmoid_straight_through(u):
     return SigmoidStraightThrough.apply(u)
 
+class Centered(nn.Module):
+    """Reparametrize a vector to a centered one.
+    
+    This maintains expressivity but splits the vector in half, one representing
+    symmetrical part and another representing the non-symetrical part. The resulting
+    vector is the symmetrical part mirrored and multiplied on one side by the
+    non-symetrical part and divided on the other.
+    
+    
+    """
+    def __init__(self, kernel_size):
+        super().__init__()
+        self.N = kernel_size//2+1
+        self.eps = torch.finfo(torch.float32).eps
+    
+    def forward(self, X):
+        X_symm = torch.cat((X[..., :self.N], X[..., :self.N-1].flip(-1)), dim=-1)
+        X_non_symm = torch.empty_like(X)
+        X_non_symm[..., :self.N-1] = X[..., self.N:]
+        X_non_symm[..., self.N-1] = 1
+        X_non_symm[..., self.N:] = 1/(X[..., self.N:].flip(-1)+self.eps)
+        X_centered = X_symm*X_non_symm
+        return X_centered
+
+    def right_inverse(self, Z):
+        Z_symm = Z[..., :self.N]*(Z[..., self.N-1:].flip(-1))
+        Z_symm = torch.sqrt(torch.abs(Z_symm))
+        Z_non_symm = Z[..., :self.N-1]/Z_symm[..., :-1]
+        Z_non_symm = torch.nan_to_num(Z_non_symm, nan=self.eps) # replace nan from zero-division
+        Z = torch.cat([Z_symm, Z_non_symm], dim=-1)
+        return Z
+
 class Symmetric(nn.Module):
-    """Reparametrize a vector to a symmetrical one by concatenating a reflexion"""
+    """Reparametrize a vector to a symmetrical one by concatenating a reflection"""
     def __init__(self, kernel_size):
         super().__init__()
         self.N = kernel_size//2+1
@@ -277,7 +349,9 @@ class Symmetric(nn.Module):
         return torch.cat((X, X[..., :-1].flip(-1)), dim=-1)
     
     def right_inverse(self, Z):
-        return Z[...,:self.N]
+        X = Z[..., :self.N]*(Z[..., self.N-1:].flip(-1))
+        X = torch.sqrt(torch.abs(X))
+        return X
 
 class UnitCap(nn.Module):
     """Reparametrize a variable to be bounded in [0, 1] with a sigmoid function 
@@ -333,6 +407,14 @@ class SymmetricNormConvTranspose1d(nn.ConvTranspose1d):
         parametrize.register_parametrization(self, "weight", UnitCap())
         parametrize.register_parametrization(self, "weight", Symmetric(kernel_size), unsafe=True)
 
+class NonSymmetricNormConvTranspose1d(nn.ConvTranspose1d):
+    def __init__(self, in_channels, out_channels, kernel_size, padding, groups,
+                 bias=False):
+        super().__init__(in_channels, out_channels, kernel_size, 
+                         padding=padding, groups=groups, bias=bias)
+        parametrize.register_parametrization(self, "weight", UnitCap())
+        parametrize.register_parametrization(self, "weight", Centered(kernel_size))
+
 class SymmetricConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, groups,
                  bias=True):
@@ -380,7 +462,7 @@ class dense_encoder(nn.Module):
         in_channels = 1
         for i in range(self.num_layers):
             out_channels = 2**(6-i//int(np.sqrt(self.num_layers)))
-            kernel_size = (vars.N//300)*2**(4 - (i-1)//int(np.sqrt(self.num_layers))) + 1
+            kernel_size = (config.N//300)*2**(4 - (i-1)//int(np.sqrt(self.num_layers))) + 1
             # first conv layer
             conv = conv_mish(in_channels, out_channels, kernel_size)
             self.body['layer{}_conv1'.format(i)] = conv
@@ -401,14 +483,14 @@ class dense_encoder(nn.Module):
 
 
         #output size-1 convolution
-        out_channels = vars.Q
+        out_channels = config.Q
         self.out_conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, 
                                   padding=0)
         nn.init.kaiming_uniform_(self.out_conv.weight, nonlinearity='sigmoid')
         nn.init.zeros_(conv.bias)
 
         #output linear transform params
-        output_linear = linspace(-1, 1, vars.N)
+        output_linear = linspace(-1, 1, config.N)
         self.register_buffer("output_linear", output_linear)
         
 
@@ -470,14 +552,14 @@ class residual_encoder(nn.Module):
             in_channels = out_channels
 
         #output size-1 convolution
-        out_channels = vars.Q
+        out_channels = config.Q
         self.out_conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, 
                                   padding='same')
         nn.init.kaiming_uniform_(self.out_conv.weight, nonlinearity='sigmoid')
         nn.init.zeros_(conv.bias)
         
         #output linear transform params
-        weights = linspace(-1, 1, vars.N)
+        weights = linspace(-1, 1, config.N)
         self.output_linear = nn.Parameter(weights, requires_grad=False)
 
     def forward(self, x):
@@ -538,14 +620,14 @@ class dilated_encoder(nn.Module):
             in_channels = out_channels
 
         #output size-1 convolution
-        out_channels = vars.Q
+        out_channels = config.Q
         self.out_conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, 
                                   padding='same')
         nn.init.kaiming_uniform_(self.out_conv.weight, nonlinearity='sigmoid')
         nn.init.zeros_(conv.bias)
         
         #output linear transform params
-        weights = linspace(-1, 1, vars.N)
+        weights = linspace(-1, 1, config.N)
         self.output_linear = nn.Parameter(weights, requires_grad=False)
 
     def forward(self, x):
@@ -569,35 +651,51 @@ class dilated_encoder(nn.Module):
 
 
 class decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, symmetric_transpose_conv, sigma):
         super().__init__()
+        self.symmetric_transpose_conv = symmetric_transpose_conv
 
         # Atenuations
-        self.A = nn.Parameter(torch.ones(vars.Q))
+        self.A = nn.Parameter(torch.ones(config.Q))
         parametrize.register_parametrization(self, "A", UnitCap())
 
         # pre narrow conv
-        in_channels = vars.Q
-        out_channels = vars.Q
+        in_channels = config.Q
+        out_channels = config.Q
         # How to deal with changes in Δλ?
-        # kernel_size = int(vars.N*np.max(vars.Δλ)/vars.Δ/4)
-        kernel_size = 51
+        # TODO: kernel_size should be an optional input when there is 
+        #       vars.Δλ simulation inaccuracy.
+        #       Alternatively, pass reference to old vars as done in evolutionary.py
+        #kernel_size = int(vars.N*np.max(vars.Δλ)/vars.Δ/4) # TODO: check if matches 51
+        #kernel_size = 51
+        kernel_size = 101
         # self.conv = SymmetricConv1d(in_channels, out_channels, kernel, groups=out_channels)
-        self.conv = NarrowConv1D(in_channels, out_channels, kernel_size, groups=out_channels)
+
+        # self.conv = NarrowConv1D(in_channels, out_channels, kernel_size, groups=out_channels)
+
+        # self.gaussian_deconv = nn.Conv1d(in_channels, out_channels, kernel_size, bias=False,
+        #                      groups=out_channels, padding='same')
+        # init_gaussian_inverse(self, sigma, kernel_size, config.N, config.Q) 
 
 
         # single spectra
-        in_channels = vars.Q
-        out_channels = vars.Q
-        kernel_size = vars.N + 1
-        self.transpose_conv = SymmetricNormConvTranspose1d(in_channels, out_channels,
-                                                 kernel_size, bias=False,
-                                                 padding=vars.N//2,
-                                                 groups=out_channels)
+        in_channels = config.Q
+        out_channels = config.Q
+        kernel_size = config.N + 1
+        if self.symmetric_transpose_conv:
+            self.transpose_conv = SymmetricNormConvTranspose1d(in_channels, out_channels,
+                                                    kernel_size, bias=False,
+                                                    padding=config.N//2,
+                                                    groups=out_channels)
+        else:
+            self.transpose_conv = NonSymmetricNormConvTranspose1d(in_channels, out_channels,
+                                                    kernel_size, bias=False,
+                                                    padding=config.N//2,
+                                                    groups=out_channels)
         nn.init.kaiming_uniform_(self.transpose_conv.weight, nonlinearity='linear')
 
         # joint spectra
-        if vars.topology.startswith('serial'):
+        if config.topology.startswith('serial'):
             # TODO: add warning if not serial_rec or serial??
             def func(x):
                 #change batch dim for channel dim
@@ -616,7 +714,7 @@ class decoder(nn.Module):
                     t_2 = a*t_2*t_next**2*s**2
                 return r
             self.joint = func
-        elif vars.topology == 'parallel':
+        elif config.topology == 'parallel':
             def func(x):
                 #change batch dim for channel dim
                 x = torch.transpose(x, 0, 1)
@@ -629,8 +727,13 @@ class decoder(nn.Module):
 
     def forward(self, x):
 
-        x = self.conv(x)
-        x = F.softmax(x, dim=-1)
+        # x = x.type(self.gaussian_deconv.weight.dtype)
+        # x = self.gaussian_deconv(x)
+        # x = torch.abs(x) # complex 2 float
+        # x = F.normalize(x, p=1, dim=-1)
+
+        # x = self.conv(x)
+        # x = F.softmax(x, dim=-1)
 
         #output transposed conv
         with parametrize.cached(): # To compute parametrization once
@@ -703,7 +806,7 @@ class base_model(pl.LightningModule):
     def metric(self, outputs, targets):
         x, y = targets
         y_hat, latent = outputs
-        return F.l1_loss(y, y_hat)*vars.Δ/vars.p
+        return F.l1_loss(y_hat, y)*config.Δ/config.p
 
     def l2(self, outputs, targets):
         x, y = targets
@@ -737,9 +840,10 @@ class base_model(pl.LightningModule):
                 if isinstance(self.noise, tuple):
                     sigma = self.noise
                     if sigma[1] < sigma[0]:
-                        raise ValueError("Noise tuple should be in accending order")
+                        raise ValueError("Noise tuple should be in ascending order")
                 else:
-                    sigma = (1e-6, 1e-1)
+                    sigma = torch.tensor([1e-6, 1e-1], device=x.device)
+                    sigma = sigma*torch.max(x)
                 sigma = torch.exp((log(sigma[1])-log(sigma[0]))*\
                                         torch.rand((x.size(0), 1), dtype=x.dtype,
                                                    layout=x.layout, device=x.device)\
@@ -836,7 +940,8 @@ class base_model(pl.LightningModule):
                                     cycle_momentum=True,
                                     anneal_strategy='cos', three_phase=False)
             if self.trainer:
-                total_steps = self.trainer.max_epochs*(vars.M//self.batch_size)
+                M = self.data[0].shape[0] # number of train instances
+                total_steps = self.trainer.max_epochs*(M//self.batch_size)
                 scheduler_kwargs['total_steps'] = total_steps
             scheduler_kwargs.update(self.scheduler_kwargs)
             scheduler = OneCycleLR(optimizer, 
@@ -909,19 +1014,30 @@ class encoder_model(base_model):
         self.encoder = encoder(num_layers, num_head_layers, **encoder_kwargs)
 
         self.prefilter = prefilter
+        
+        if self.prefilter:
+            b, a = butter(N=2, Wn=0.1, btype='lowpass')
+            self.a = torch.tensor(a, dtype=self.dtype, device="cpu")
+            self.b = torch.tensor(b, dtype=self.dtype, device="cpu")
 
     def forward(self, x):
-        if self.prefilter:
-            x = lowpass_biquad(x, sample_rate=1, cutoff_freq=0.2)
+        x = self.prefilter_func(x)
         return self.encoder(x)
+
+    def prefilter_func(self, x):
+        if self.prefilter:
+            # x = lowpass_biquad(x, sample_rate=1, cutoff_freq=0.1)
+            x = filtfilt(x.cpu(), self.a, self.b, clamp=False).to(self.device)
+        return x
 
     def setup(self, stage):
         super().setup(stage)
 
-        self.reg_loss = F.mse_loss
+        self.reg_loss = nn.MSELoss()
         
+        # regularization
         if self.hparams.reg_type == None or self.hparams.reg == 0:
-            self.reg_func = null
+            self.reg_func = nullFunc
         else:
             if self.hparams.reg_type == 'l1':
                 self.reg_func = l1_norm
@@ -942,7 +1058,7 @@ class encoder_model(base_model):
         x, y = targets
         y_hat, latent = outputs
 
-        loss = self.reg_loss(y, y_hat)\
+        loss = self.reg_loss(y_hat, y)\
               + self.hparams.reg*self.reg_func(latent)\
               + self.hparams.smooth_latent*roughness(latent)
         return loss
@@ -950,8 +1066,8 @@ class encoder_model(base_model):
     def batch_forward(self, X):
         shape = X.shape
         X = self._prep_dataloader((X,))
-        Y_hat = np.empty((shape[0], vars.Q))
-        L = np.empty((shape[0], vars.Q, shape[1]))
+        Y_hat = np.empty((shape[0], config.Q))
+        L = np.empty((shape[0], config.Q, shape[1]))
         for i, x in enumerate(X):
             y_hat, latent = self(x[0])
             Y_hat[i*self.batch_size: (i+1)*self.batch_size] = y_hat.detach().cpu().numpy()
@@ -961,9 +1077,10 @@ class encoder_model(base_model):
 
 class autoencoder_model(encoder_model):
     def __init__(self, gamma=1e-3, smooth_kernel=1e-6, latent_noise=None,
-                 finetuning=False,*args, **kwargs):
+                 finetuning=False, symmetric_transpose_conv = True, 
+                 masked=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.save_hyperparameters('gamma', 'smooth_kernel', logger=False)
+        self.save_hyperparameters('gamma', 'smooth_kernel', 'masked', logger=False)
 
         self.latent_noise = latent_noise
 
@@ -971,9 +1088,18 @@ class autoencoder_model(encoder_model):
 
         self.reduce_on_plateau_monitor = 'val_rec_loss'
 
-        self.decoder = decoder()
+        self.symmetric_transpose_conv = symmetric_transpose_conv
 
-    def forward(self, x):
+        self.decoder = decoder(self.symmetric_transpose_conv, self.hparams.sigma)
+        
+        if self.hparams.masked:
+            X_train = self.data[1]
+            rand = np.random.rand(X_train.shape[0])
+            mask = rand < self.hparams.masked 
+            X_train[~mask] = np.nan
+
+    def forward(self, x):        
+        x = self.prefilter_func(x)
         y, latent = self.encoder(x)
         if self.latent_noise:
             if isinstance(self.latent_noise, float):
@@ -992,17 +1118,24 @@ class autoencoder_model(encoder_model):
     def setup(self, stage=0):
         super().setup(stage)
 
-        if self.hparams.smooth_kernel == 0:
-            self.roughness = null
+        if self.hparams.smooth_kernel == 0 and self.hparams.smooth_latent == 0:
+            self.roughness = nullFunc
         else:
             self.roughness = roughness
 
-        self.rec_loss = F.mse_loss
+        # self.rec_loss = F.mse_loss
+        self.rec_loss = nn.L1Loss()
+
+        if self.hparams.masked:
+            self.reg_loss = MaskedLoss(nn.MSELoss)
+            self.metric_loss = MaskedLoss(nn.L1Loss)
+        else:
+            self.metric_loss = nn.L1Loss()
 
         if self.hparams.gamma == 0:
-            self.rec_loss = null
+            self.rec_loss = NullLoss()
         elif self.hparams.gamma == 1:
-            self.reg_loss = null
+            self.reg_loss = NullLoss()
         
         # if self.finetuning:
         #     params_to_buffers(self.decoder.conv)
@@ -1011,7 +1144,7 @@ class autoencoder_model(encoder_model):
         """Mean Absolute Value in picometers"""
         x, y = targets
         x_hat, y_hat, latent = outputs
-        return F.l1_loss(y, y_hat)*vars.Δ/vars.p
+        return self.metric_loss(y_hat, y)*config.Δ/config.p
 
     def l2(self, outputs, targets):
         """l2-norm of latent variable"""
@@ -1022,7 +1155,7 @@ class autoencoder_model(encoder_model):
     def loss(self, outputs, targets):
         x, y = targets
         x_hat, y_hat, latent = outputs
-        loss = (1-self.hparams.gamma)*self.reg_loss(y, y_hat) \
+        loss = (1-self.hparams.gamma)*self.reg_loss(y_hat, y) \
                + self.hparams.gamma*self.rec_loss(x_hat, x) \
                + self.hparams.reg*self.reg_func(latent) \
                + self.hparams.smooth_latent*roughness(latent)\
@@ -1056,8 +1189,8 @@ class autoencoder_model(encoder_model):
         shape = X.shape
         X = self._prep_dataloader((X,))
         X_hat = np.empty(shape)
-        Y_hat = np.empty((shape[0], vars.Q))
-        L = np.empty((shape[0], vars.Q, shape[1]))
+        Y_hat = np.empty((shape[0], config.Q))
+        L = np.empty((shape[0], config.Q, shape[1]))
         for i, x in enumerate(X):
             x_hat, y_hat, latent = self(x[0])
             X_hat[i*self.batch_size: (i+1)*self.batch_size] = x_hat.detach().cpu().numpy()
