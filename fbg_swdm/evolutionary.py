@@ -20,7 +20,7 @@ from itertools import permutations
 
 from fbg_swdm.simulation import X, normalize, denormalize
 import numpy as np
-import fbg_swdm.variables as vars
+import fbg_swdm.variables as config
 import random
 
 from sklearn.mixture import GaussianMixture
@@ -33,8 +33,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 def clone_module(module):
     """ Clones vars module to keep an static local copy """
-    global vars
-    vars = module.clone()
+    global config
+    config = module.clone()
 
 # ---------------------------------------------------------------------------- #
 #                                   Constants                                  #
@@ -62,7 +62,7 @@ def stack(func):
         if len(shape) == 1:
             return func(self, x, verbose)
         else:
-            Y_hat = np.empty((shape[0], vars.Q))
+            Y_hat = np.empty((shape[0], config.Q))
             for i, k in enumerate(x):
                 Y_hat[i] = func(self, k, verbose)
             return Y_hat
@@ -81,7 +81,7 @@ class FBGDecoder(Decoder):
 
     def decode(self, genome, *args, **kwargs):
         A_b = genome
-        phenome = X(A_b, vars.λ, vars.A, vars.Δλ, vars.I, vars.Δn_dc, simulation=vars.simulation)
+        phenome = X(A_b, config.λ, config.A, config.Δλ, config.I, config.Δn_dc, simulation=config.simulation)
         return phenome
 
     def __repr__(self):
@@ -96,7 +96,7 @@ class FBGDecoder_binary(Decoder):
 
     def decode(self, genome, *args, **kwargs):
         I, A_b = partial_decode(genome, self.B)
-        phenome = X(A_b, vars.λ, vars.A, vars.Δλ, I, vars.Δn_dc, simulation=vars.simulation)
+        phenome = X(A_b, config.λ, config.A, config.Δλ, I, config.Δn_dc, simulation=config.simulation)
         return phenome
 
     def __repr__(self):
@@ -155,7 +155,7 @@ def stoc_swap(population: Iterator, p_swap: int = 0.5) -> Iterator:
 def single_swap(population: Iterator) -> Iterator:
     """ Yield  individual with one random permutation"""
     for ind in population:
-        id_swap = random.sample(list(range(vars.Q)), k=2)
+        id_swap = random.sample(list(range(config.Q)), k=2)
         genome_aux = ind.genome
         ind.genome[id_swap] = genome_aux[id_swap[::-1]]
         yield ind
@@ -183,11 +183,11 @@ def sort_genome(population: Iterator, B: int) -> Iterator:
     for ind in population:
         I_float = next(partial_decode(ind.genome, B))  # decode I from genome
         indx = np.argsort(I_float)  # index of sorted I
-        if vars.I[0]>vars.I[1]: # if larger first
+        if config.I[0]>config.I[1]: # if larger first
             indx = indx[::-1]  # invert sort
 
         # split I from A_b chromosomes
-        genome = np.split(ind.genome, vars.Q)
+        genome = np.split(ind.genome, config.Q)
         I, A_b = np.split(np.array(genome), 2, axis=-1)
         # sort chromosomes according to indx
         I = np.take(I, indx, axis=0)
@@ -296,11 +296,11 @@ def bool2float(a, B):
 
 def partial_decode(genome, B):
     """ return I and then A_b from binary genome """
-    genome = np.split(genome, vars.Q)
+    genome = np.split(genome, config.Q)
     I_bin, A_b_bin = np.split(np.array(genome), 2, axis=-1)
-    I_float = vars.I_min + bool2float(I_bin, B)*(vars.I_max-vars.I_min)
+    I_float = config.I_min + bool2float(I_bin, B)*(config.I_max-config.I_min)
     yield I_float
-    A_b_float = vars.λ0 + vars.portion*(2*vars.Δ*bool2float(A_b_bin, B) - vars.Δ)
+    A_b_float = config.λ0 + config.portion*(2*config.Δ*bool2float(A_b_bin, B) - config.Δ)
     yield A_b_float
 
 # -------------------------- Differential Evolution ------------------------- #
@@ -353,10 +353,10 @@ class GeneticAlgo():
                  threshold=0.1, patience=200, bounds=None):
         self.pop_size = pop_size
         self.max_generation = max_generation
-        self.Q = vars.Q if Q is None else Q
+        self.Q = config.Q if Q is None else Q
         self.threshold = threshold
         self.patience = patience
-        self.bounds = vars.bounds if bounds is None else bounds
+        self.bounds = config.bounds if bounds is None else bounds
 
         self.problem = FBGProblem()
 
@@ -364,16 +364,16 @@ class GeneticAlgo():
             shape = x.shape
             if len(shape) == 1:
                 return self.predict_func(x, verbose)
-            elif vars.multiprocessing:
-                max_workers = None if vars.multiprocessing is True else vars.multiprocessing
+            elif config.multiprocessing:
+                max_workers = None if config.multiprocessing is True else config.multiprocessing
                 with ProcessPoolExecutor(max_workers) as executor:
                     results = executor.map(self.predict_func, x)
-                    Y_hat = np.empty((shape[0], vars.Q))
+                    Y_hat = np.empty((shape[0], config.Q))
                     for i, y_hat in zip(range(shape[0]), results):
                         Y_hat[i] = y_hat
                 return Y_hat
             else:
-                Y_hat = np.empty((shape[0], vars.Q))
+                Y_hat = np.empty((shape[0], config.Q))
                 for i, k in enumerate(x):
                     Y_hat[i] = self.predict_func(k, verbose)
                 return Y_hat
@@ -384,7 +384,7 @@ class GeneticAlgo():
         return best_individual.genome
 
     def init_population(self, x):
-        bounds = ((self.bounds, ) * vars.Q)
+        bounds = ((self.bounds, ) * config.Q)
         self.problem.set(x)
         parents = Individual.create_population(
                                    self.pop_size,
@@ -454,9 +454,6 @@ class genetic_algorithm_binary(GeneticAlgo):
         N = self.Q*2*self.B # number of chromosomes
         return pipe(
                     parents,
-                    # stoc_pair_selection(problem=self.problem),
-                    # ops.proportional_selection(offset='pop-min',
-                    #                            key=lambda x: -x.fitness),
                     ops.sus_selection(offset='pop-min', key=lambda x: -x.fitness),
                     ops.clone,
                     one_point_crossover(p=self.p_swap),
@@ -496,7 +493,7 @@ class genetic_algorithm_binary(GeneticAlgo):
 class genetic_algorithm_real(GeneticAlgo):
     def __init__(self, pop_size=20, max_generation=500, Q=None,
                  threshold=0.1, patience=200, bounds=None, p_crossover=0.2,
-                 std=0.01*vars.n, swap=False):
+                 std=0.01*config.n, swap=False):
         super().__init__(pop_size, max_generation, Q, threshold, patience, bounds)
         self.p_crossover = p_crossover
         self.std = std
@@ -505,9 +502,6 @@ class genetic_algorithm_real(GeneticAlgo):
     def pipeline(self, parents):
         return pipe(
                     parents,
-                    # stoc_pair_selection(problem=self.problem),
-                    # ops.proportional_selection(offset='pop-min',
-                    #         key=lambda x: -x.fitness),
                     ops.sus_selection(offset='pop-min', key=lambda x: -x.fitness),
                     ops.clone,
                     ops.uniform_crossover(p_swap=self.p_crossover),
@@ -532,7 +526,7 @@ class DistributedEstimation(GeneticAlgo):
     def __init__(self, pop_size=100, max_generation=500, Q=None,
                  threshold=0.1, bounds=None, m=None, top_size=10, patience=200):
         super().__init__(pop_size, max_generation, Q, threshold, patience, bounds)
-        self.m = factorial(vars.Q) if m is None else m
+        self.m = factorial(config.Q) if m is None else m
         self.top_size = top_size
 
     def pipeline(self, parents):
@@ -620,7 +614,7 @@ class particle_swarm_optimization(GeneticAlgo):
 
     def get_size(self):
         """ get size for velocities initialization"""
-        return 1, self.pop_size, vars.Q
+        return 1, self.pop_size, config.Q
     
     def init_velocities(self):
         if self.vel_init == 'gaussian': # X ~ N(0, diff(bounds))
@@ -651,8 +645,8 @@ class particle_swarm_optimization(GeneticAlgo):
     def update_velocities(self, parents, velocities, w, pa, ga):
 
         N = len(parents)
-        r = np.random.rand(N, vars.Q)
-        q = np.random.rand(N, vars.Q)
+        r = np.random.rand(N, config.Q)
+        q = np.random.rand(N, config.Q)
 
         parents_genome = get_genome(parents)
         i = self.current_subpopulation
@@ -709,8 +703,8 @@ class dynamic_multi_swarm_particle_swarm_optimization(particle_swarm_optimizatio
     def __init__(self, pop_size=None, max_generation=1000, Q=None,
                  threshold=0.1, bounds=None, w=0.6, pa=2, ga=2, lr=0.1,
                  swarms=None, migration_gap=5, vel_init='gaussian', patience=200):
-        pop_size = dms_pso_defaults[0][vars.Q-1] if pop_size is None else pop_size
-        swarms = dms_pso_defaults[1][vars.Q-1] if swarms is None else swarms
+        pop_size = dms_pso_defaults[0][config.Q-1] if pop_size is None else pop_size
+        swarms = dms_pso_defaults[1][config.Q-1] if swarms is None else swarms
         super().__init__(pop_size, max_generation, Q,
                  threshold, bounds, w, pa, ga,
                  lr, vel_init, patience)
@@ -719,7 +713,7 @@ class dynamic_multi_swarm_particle_swarm_optimization(particle_swarm_optimizatio
 
     def get_size(self):
         """ get size for velocities initialization"""
-        return self.swarms, self.pop_size, vars.Q
+        return self.swarms, self.pop_size, config.Q
 
     def predict_func(self, x, verbose=False):
         subpopulations = self.init_population(x)
@@ -737,7 +731,7 @@ class dynamic_multi_swarm_particle_swarm_optimization(particle_swarm_optimizatio
         return best_individual.genome
 
     def init_population(self, x):
-        bounds = ((self.bounds, ) * vars.Q)
+        bounds = ((self.bounds, ) * config.Q)
         self.problem.set(x)
         subpopulations = [Individual.create_population(
                                    self.pop_size,
