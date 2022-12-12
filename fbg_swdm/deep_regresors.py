@@ -335,7 +335,7 @@ class Centered(nn.Module):
         Z_symm = Z[..., :self.N]*(Z[..., self.N-1:].flip(-1))
         Z_symm = torch.sqrt(torch.abs(Z_symm))
         Z_non_symm = Z[..., :self.N-1]/Z_symm[..., :-1]
-        Z_non_symm = torch.nan_to_num(Z_non_symm, nan=self.eps) # replace nan from zero-division
+        Z_non_symm = torch.nan_to_num(Z_non_symm, nan=1) # replace nan from zero-division
         Z = torch.cat([Z_symm, Z_non_symm], dim=-1)
         return Z
 
