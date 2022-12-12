@@ -829,28 +829,27 @@ class base_model(pl.LightningModule):
 
     def add_noise_(self, x):
         """Adds noise inplace"""
-        if self.noise:
-            if self.fixed_noise:
-                if isinstance(self.noise, float):
-                    sigma = self.noise
-                else:
-                    sigma = 1e-2
-            else:
+        if self.noise is False:
+            return
+        if isinstance(self.fixed_noise, float):
+            sigma = self.fixed_noise
+        elif self.fixed_noise is True:
+            sigma = 1e-2
+        else:
+            if isinstance(self.noise, tuple):
                 # Sigma from LogUniform(sigma[0], sigma[1]) for each element
-                if isinstance(self.noise, tuple):
-                    sigma = self.noise
-                    if sigma[1] < sigma[0]:
-                        raise ValueError("Noise tuple should be in ascending order")
-                else:
-                    sigma = torch.tensor([1e-6, 1e-1], device=x.device)
-                    sigma = sigma*torch.max(x)
-                sigma = torch.exp((log(sigma[1])-log(sigma[0]))*\
-                                        torch.rand((x.size(0), 1), dtype=x.dtype,
-                                                   layout=x.layout, device=x.device)\
-                                        + log(sigma[0])
-                                        )
-            noise = sigma*torch.randn_like(x)
-            x += noise
+                sigma = self.noise
+                assert(sigma[1] < sigma[0], "Noise tuple should be in ascending order")
+            else:
+                sigma = torch.tensor([1e-6, 1e-1], device=x.device)
+                sigma = sigma*torch.max(x)
+            sigma = torch.exp((log(sigma[1])-log(sigma[0]))*\
+                                    torch.rand((x.size(0), 1), dtype=x.dtype,
+                                                layout=x.layout, device=x.device)\
+                                    + log(sigma[0])
+                                    )
+        noise = sigma*torch.randn_like(x)
+        x += noise
 
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
