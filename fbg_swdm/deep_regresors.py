@@ -831,15 +831,17 @@ class base_model(pl.LightningModule):
         """Adds noise inplace"""
         if self.noise is False:
             return
-        if isinstance(self.fixed_noise, float):
-            sigma = self.fixed_noise
-        elif self.fixed_noise is True:
-            sigma = 1e-2
+        assert(isinstance(self.fixed_noise, bool), "fixed_noise should be boolean")
+        if self.fixed_noise:
+            if isinstance(self.noise, float):
+                sigma = self.noise
+            else:
+                sigma = 1e-2
         else:
             if isinstance(self.noise, tuple):
                 # Sigma from LogUniform(sigma[0], sigma[1]) for each element
                 sigma = self.noise
-                assert(sigma[1] < sigma[0], "Noise tuple should be in ascending order")
+                assert(sigma[1] < sigma[0], "noise tuple should be in ascending order")
             else:
                 sigma = torch.tensor([1e-6, 1e-1], device=x.device)
                 sigma = sigma*torch.max(x)
