@@ -206,7 +206,7 @@ def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=None,
     x = X(y)
 
     if noise:
-        x += np.random.randn(*x.shape)*noise
+        x = x + np.random.randn(*x.shape)*noise
     return x, y
 
 def _gen_sweep_multi(d=0.6*n, N=300, N_datapoint=None, **kwargs):
@@ -264,7 +264,7 @@ def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, **kwargs):
     autoencoder = isinstance(model, autoencoder_model)
 
     if noise:
-        x += np.random.randn(*x.shape)*noise
+        x = x + np.random.randn(*x.shape)*noise
 
     if norm:
         x = normalize(x)
