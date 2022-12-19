@@ -951,7 +951,8 @@ class base_model(pl.LightningModule):
                                     anneal_strategy='cos', three_phase=False)
             if self.trainer:
                 M = self.data[0].shape[0] # number of train instances
-                total_steps = self.trainer.max_epochs*(M//self.batch_size)
+                total_steps = self.trainer.max_epochs*(M//self.batch_size)//self.trainer.accumulate_grad_batches
+                assert(total_steps > 0, "max_epochs should be set in trainer")
                 scheduler_kwargs['total_steps'] = total_steps
             scheduler_kwargs.update(self.scheduler_kwargs)
             scheduler = OneCycleLR(optimizer, 
@@ -1086,7 +1087,7 @@ class encoder_model(base_model):
 
 
 class autoencoder_model(encoder_model):
-    def __init__(self, gamma=1e-3, smooth_kernel=1e-6, latent_noise=None,
+    def __init__(self, gamma=1e-3, smooth_kernel=1e-6, latent_noise=False,
                  finetuning=False, symmetric_transpose_conv = True, 
                  masked=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1128,7 +1129,7 @@ class autoencoder_model(encoder_model):
     def setup(self, stage=0):
         super().setup(stage)
 
-        if self.hparams.smooth_kernel == 0 and self.hparams.smooth_latent == 0:
+        if self.hparams.smooth_kernel == 0 or self.hparams.smooth_latent == 0:
             self.roughness = nullFunc
         else:
             self.roughness = roughness
@@ -1167,7 +1168,7 @@ class autoencoder_model(encoder_model):
         loss = (1-self.hparams.gamma)*self.reg_loss(y_hat, y) \
                + self.hparams.gamma*self.rec_loss(x_hat, x) \
                + self.hparams.reg*self.reg_func(latent) \
-               + self.hparams.smooth_latent*roughness(latent)\
+               + self.hparams.smooth_latent*self.roughness(latent) \
                + self.hparams.smooth_kernel \
                  *self.roughness(self.decoder.transpose_conv.weight)
         return loss
