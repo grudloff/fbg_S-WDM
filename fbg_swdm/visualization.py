@@ -22,7 +22,7 @@ def mae(a, b):
     """ Mean absolute values """
     return np.mean(np.abs(a-b))
 
-def plot_datapoint(x, y, i=None, normalized=False, **kwargs):
+def plot_datapoint(x, y, i=None, normalized=False, figname=None, **kwargs):
     """ Plot one datapoint and compare to per sensor simulated spectra.
 
         Parameters
@@ -68,9 +68,18 @@ def plot_datapoint(x, y, i=None, normalized=False, **kwargs):
             ax.stem(y[i, None], np.array([1]), linefmt='--', markerfmt="None",
                 basefmt="None", use_line_collection=False,
                 label="$y_"+str(i+1)+"$")
-        plt.xlabel("Reflection spectrum")
+        plt.ylabel("Reflection spectrum [-]")
         plt.xlabel("$\lambda [nm]$")
         plt.legend(loc='right', bbox_to_anchor=(1.15, 0.5), frameon=False)
+    
+    if figname:
+        plt.title("")
+        if not isinstance(figname, str):
+            figname = join(config.exp_dir, 
+                           "_".join(filter(None, (config.exp_name, config.tag, 'datapoint'))))
+        fig.savefig(figname+'.pdf', bbox_inches='tight')
+
+
 
 def plot_sweep_datapoint(i=0, N=300, **kwargs):
     # simulate sweep and plot n datapoint
