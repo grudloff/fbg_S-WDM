@@ -152,7 +152,10 @@ def X(A_b, λ=None, A=None, Δλ=None, I=None, Δn_dc=None, batch_size=None, **k
 
     A_b, λ, A, Δλ, I, Δn_dc = prep_dims(A_b, λ, A, Δλ, I, Δn_dc)
 
-    if config.topology == 'parallel':
+    if config.topology == 'none':
+        x = R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs)
+
+    elif config.topology == 'parallel':
         x = np.sum(R(A_b, λ, A, Δλ, I, Δn_dc, **kwargs), axis=-1)
 
     elif config.topology == 'serial_new':
