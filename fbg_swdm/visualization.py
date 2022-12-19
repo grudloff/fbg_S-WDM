@@ -399,19 +399,22 @@ def check_reconstruction(model, x, y, K=10, add_center=True, add_border=False, *
             a1.stem(y[i, j, None]/config.n, np.max(x[i], keepdims=True), linefmt='-', markerfmt="None",
                 basefmt="None", use_line_collection=False,
                 label="$y_"+str(j+1)+"$")
-
+        if evolutionary or autoencoder:
+            a1.plot(config.λ/n, x_hat[i], label="$\hat{x}$")
+        for j in range(config.Q):
+            a1.stem(y_hat[i, j, None]/config.n, np.max(x[i], keepdims=True), linefmt='--', markerfmt="None",
+                basefmt="None", use_line_collection=False,
+                label="$\hat{y}_"+str(j+1)+"$")
         if not evolutionary:
             a2 = a1.twinx()
             a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
             a2.plot(config.λ/n, latent[i].T, label=[r"$\tilde{y}_{"+str(i+1)+"}$" for i in range(config.Q)])
             a2.set_ylabel(r'$\tilde{y}$')
-        else:
-            a1.plot(config.λ/n, x_hat[i], label="$\hat{x}$")
-            for j in range(config.Q):
-                a1.stem(y_hat[i, j, None]/config.n, np.max(x[i], keepdims=True), linefmt='--', markerfmt="None",
-                    basefmt="None", use_line_collection=False,
-                    label="$\hat{y}_"+str(j+1)+"$")
-        plt.legend()
+
+        lines, labels = a1.get_legend_handles_labels()
+        lines2, labels2 = a2.get_legend_handles_labels()
+        a2.legend(lines + lines2, labels + labels2, loc=0)
+
 
 def check_sweep_reconstruction(model, **kwargs):
     """ Simulate sweep and call check_reconstruction.
