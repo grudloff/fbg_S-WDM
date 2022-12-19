@@ -227,6 +227,14 @@ class MaskedLoss(nn.Module):
         mask = ~actual.isnan()
         return self.loss(pred[mask], actual[mask])
 
+class RMSLELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        
+    def forward(self, pred, actual):
+        return torch.sqrt(self.mse(torch.log(pred + 1), torch.log(actual + 1)))
+
 # ------------------------------ Initialization ------------------------------ #
 
 def transpose_conv_init(model, data=None, simulation=None):
@@ -1124,8 +1132,7 @@ class autoencoder_model(encoder_model):
         else:
             self.roughness = roughness
 
-        # self.rec_loss = F.mse_loss
-        self.rec_loss = nn.L1Loss()
+        self.rec_loss = RMSLELoss()
 
         if self.hparams.masked:
             self.reg_loss = MaskedLoss(nn.MSELoss)
