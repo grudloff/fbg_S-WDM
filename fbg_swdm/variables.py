@@ -78,8 +78,8 @@ def log(*args):
             file.write(string)
         file.write('\n')
 
-b, a = butter(N=2, Wn=0.05, btype='lowpass')
 def filt(x):
+    b, a = butter(N=2, Wn=0.05, btype='lowpass')
     x = filtfilt(b, a, x)
     return x
 
