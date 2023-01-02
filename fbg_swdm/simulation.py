@@ -6,7 +6,7 @@ from numpy import exp as exp
 import fbg_swdm.variables as config
 from math import sqrt
 from functools import wraps
-
+from scipy.ndimage import shift
 
 # ---------------------------------------------------------------------------- #
 #                                  Decorators                                  #
@@ -28,6 +28,25 @@ def listify(func):
 # ---------------------------------------------------------------------------- #
 #                               Helper Functions                               #
 # ---------------------------------------------------------------------------- #
+
+def delta2shift(y):
+    # wavelength to shift of spectra
+    shift = (y-config.λ0)*(config.N-1)/(2*config.Δ)-0.5
+    return shift
+
+def pseudosimulated_R(λb, λ, A, Δλ, I, Δn_dc):
+    if I is None:
+        I = config.I
+    shift_matrix = delta2shift(λb)
+    x = config.reference
+    x *= np.expand_dims(I.squeeze()/np.max(x, axis=-1), axis=-1)
+    assert(x.shape==(config.Q, 2*config.N), "reference should have shape Qx2N")
+    M = shift_matrix.shape[0]
+    X = np.empty((M, config.N, config.Q))
+    for i in range(M):  
+        for k in range(config.Q):
+            X[i, :, k] = shift(x[k], float(shift_matrix[i,...,k]), order=5)[1000:3000]
+    return X.squeeze()
 
 # reflection spectrum
 def gaussian_R(λb, λ, A, Δλ, I, Δn_dc):
@@ -127,6 +146,8 @@ def R(*args, **kwargs):
         return gaussian_R(*args, **kwargs)
     elif simulation == 'true':
         return true_R(*args, **kwargs)
+    elif simulation == 'pseudosimulated':
+        return pseudosimulated_R(*args, **kwargs)
     else:
         raise ValueError("simulation must be in {'gaussian','true'}")
 
