@@ -9,6 +9,7 @@ from json import dumps, JSONEncoder
 from datetime import datetime
 import sys
 import importlib.util
+from scipy.signal import butter, filtfilt
 
 _module = modules[__name__]
 
@@ -77,6 +78,11 @@ def log(*args):
             file.write(string)
         file.write('\n')
 
+b, a = butter(N=2, Wn=0.05, btype='lowpass')
+def filt(x):
+    x = filtfilt(b, a, x)
+    return x
+
 def setattrs(**kwargs):
     """Set multiple attributes of module from dictionary"""
     mode_properties_flag = False
@@ -109,6 +115,16 @@ def setattrs(**kwargs):
     if Q_flag or portion_flag:
         global bounds
         bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
+    if simulation=="pseudosimulated":
+        global reference
+        if reference is None:
+            x_05 = np.load(r"data\fbg05.npz")['spectra']
+            x_05 = x_05-np.min(x_05)
+            x_05 = filt(x_05)
+            x_09 = np.load(r"data\fbg09.npz")['spectra']
+            x_09 = x_09-np.min(x_09)
+            x_09 = filt(x_09)
+            reference = np.stack([x_05, x_09])
     if mode_properties_flag:
         set_mode_properties()
     
@@ -226,3 +242,5 @@ except ModuleNotFoundError:
 set_mode_properties()
 
 φN = 10 # Number of points for phase sweep
+
+reference=None
