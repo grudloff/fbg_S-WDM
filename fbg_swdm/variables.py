@@ -244,3 +244,13 @@ set_mode_properties()
 φN = 10 # Number of points for phase sweep
 
 reference=None
+data_filename = "data\experimental_data.npz"
+
+def load_data(filename=None, to_nano=True):
+    filename = data_filename if filename is None else filename
+    with np.load(filename, allow_pickle=True) as f:
+        X=f['X']
+        y=f['y']
+    if to_nano ==True:
+        y = y*n
+    return X, y
