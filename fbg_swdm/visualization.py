@@ -314,8 +314,11 @@ def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, subplot=Fa
             np.savez(f, mare=mare, y=y)
         fig.savefig(figname+'.pdf', bbox_inches='tight')
 
-def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True):
+def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_lambda=False):
     error = np.abs(y - y_hat)
+    if delta_lambda:
+        y -= config.λ0
+        y_hat -= config.λ0
 
     noise_tag = "noise{:.0e}".format(noise) if noise else None
     pretest_tag = 'pretest' if config.pre_test else None
@@ -340,15 +343,19 @@ def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True):
     a1.plot(y_hat/n, linewidth=2, linestyle="-.",
             label=["$\hat{y}_{"+str(i)+"}$" for i in range(1, config.Q+1)]
             )
-    a1.set_ylabel('$\lambda_{B}$ [nm]')
+    if delta_lambda:
+        a1.set_ylabel('$\Delta\lambda_{B}$ [nm]')
+    else:
+        a1.set_ylabel('$\lambda_{B}$ [nm]')
 
     a2.plot(np.sum(error, axis=1)/p, ":k", label='MAE')
-    a2.set_ylabel('Mean Absolute Error [pm]', labelpad=15 if subplot else 0)
+    a2.set_ylabel('MAE [pm]', labelpad=27 if subplot else 0)
 
     a2.set_ylim(bottom=0)
     # a2.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    a2.set_xlabel('Instance [-]')
 
-    fig.legend(loc='right', bbox_to_anchor=(1.085, 0.5), frameon=False)
+    fig.legend(loc='right', bbox_to_anchor=(1.15, 0.5), frameon=False)
 
     figname = join(config.exp_dir, 
             "_".join(filter(None, (config.exp_name, config.tag, 'sweep',*tag))))
@@ -502,7 +509,7 @@ def error_snr(model, norm=None, min_snr=0, max_snr = 40, M=10, split=True, N=300
         plt.ylabel('Absolute Error [pm]')
         plt.xlabel('SNR [dB]')
         plt.yscale('log')
-        plt.c(save_file+'.pdf', bbox_inches='tight')
+        plt.savefig(save_file+'.pdf', bbox_inches='tight')
 
 
 def group_boxplot(x, y, labels, title=None):
@@ -578,7 +585,7 @@ def compare_finetune(pretrain_exp_name=None, noise_compare=False):
     df = concat(df_list, axis=1)
     boxplot(data=df)
     # plt.legend(title='Model', loc='upper right', frameon=False)
-    plt.ylabel('Absolute Error [pm]')
+    plt.ylabel('MAE [pm]')
     # plt.xlabel('SNR [dB]')
     plt.yscale('log')
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, noise_tag, 'compare_finetune'))))
@@ -725,15 +732,17 @@ def print_snr(tags=None , list_id=None, labels=None):
             plt.yscale('log')
             plt.savefig(save_file+'.pdf', bbox_inches='tight')
 
-def print_sweep(noise=False, subplot=False):
+def print_sweep(noise=False, subplot=False, delta_lambda=False):
 
+    noise_tag = "noise{:.0e}".format(noise) if noise else None
     save_file = join(config.exp_dir, 
-                    "_".join(filter(None, (config.exp_name, config.tag, 'sweep'))))
+                    "_".join(filter(None, (config.exp_name, config.tag, 'sweep', noise_tag))))
     with np.load(save_file+'.npz') as f:
         y = f["y"]
         y_hat = f["y_hat"]
 
-        predict_plot_partial(y, y_hat, noise, subplot, save=False)
+        predict_plot_partial(y, y_hat, noise, subplot, save=False,
+                             delta_lambda=delta_lambda)
 
 def load_snr_data(load_file, db_id=4):
     with np.load(load_file+'.npz') as f:
@@ -805,13 +814,19 @@ def compare_simulated_finetune(pretrain_exp_name=None):
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
 
-def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_name = "baseline", reg_tag = "ls_svm", ea_tag = 'swap_diff'):
+def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_name = "baseline",
+                                        reg_tag = "ls_svm", ea_tag = 'swap_diff',
+                                        finetune_option_dict=None, x_axis_label=True, 
+                                        noise=False):
 
     reg_label = config.reg_labels[config.reg_tags.index(reg_tag)]
     ea_label = config.ea_labels[config.ea_tags.index(ea_tag)]
 
-    finetune_options = [None, "attenuation", "spectral",  "multi"]
-    finetune_labels = ["None","Attenuation", "Profile", "Attenuation \n & Profile "]
+    if finetune_option_dict is None:
+        finetune_options = [None, "attenuation", "spectral",  "multi"]
+        finetune_labels = ["Reference","  Attenuation", "Profile", "Attenuation \n & Profile "]
+    else:
+        finetune_labels ,finetune_options = zip(*finetune_option_dict.items())
     
     if config.Q==2: 
         topology = "serial"
@@ -833,42 +848,60 @@ def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_nam
     for finetune_option, finetune_label in zip(finetune_options, finetune_labels):
         tag = finetune_option
 
-        load_file_list = []
+        vector_list = []
         exp_dir = join(config.base_dir, "_".join(filter(None, (baseline_exp_name, tag))))
         # regression
-        load_file = join(exp_dir, 
-                        "_".join(filter(None, (baseline_exp_name, tag, reg_tag, 'error_snr'))))
-        load_file_list.append(load_file)
+        try:
+            noise_tag = "noise{:.0e}".format(noise) if noise else None
+            load_file = join(exp_dir, 
+                "_".join(filter(None, (baseline_exp_name, tag, reg_tag, 'sweep', noise_tag))))
+            vector_list.append(load_sweep_data(load_file))
+        except:
+            load_file = join(exp_dir, 
+                            "_".join(filter(None, (baseline_exp_name, tag, reg_tag, 'error_snr'))))
+            vector_list.append(load_snr_data(load_file))
 
         # evolutionary algorithm
         load_file = join(exp_dir, 
                         "_".join(filter(None, (baseline_exp_name, tag, ea_tag, 'error_snr'))))
-        load_file_list.append(load_file)
+        vector_list.append(load_snr_data(load_file))
 
         if finetune_label == finetune_labels[0]:
             exp_name = pretrain_exp_name
         else:
             exp_name = exp_name_no_topology
 
-        if config.Q==2:
-            tag = None if tag == "multi" else tag
-            exp_dir = join(config.base_dir, exp_name)
-            exp_dir = "_".join(filter(None, (exp_dir, tag, topology)))
-        else:
-            exp_dir = join(config.base_dir, exp_name)
-            exp_dir = "_".join(filter(None, (exp_dir, topology)))
+        # if config.Q==2:
+        #     tag = None if tag == "multi" else finetune_option
+        #     exp_dir = join(config.base_dir, exp_name)
+        #     exp_dir = "_".join(filter(None, (exp_dir, tag, topology)))
+        # else:
+        #     exp_dir = join(config.base_dir, exp_name)
+        #     exp_dir = "_".join(filter(None, (exp_dir, topology)))
 
-        # Pretrained or Finetune
-        load_file = join(exp_dir, 
-                        "_".join(filter(None, (exp_name, tag, topology, 'error_snr'))))
-        load_file_list.append(load_file)
+        exp_dir_tag = None if tag == "multi" or config.Q!=2 else tag
+        exp_dir = join(config.base_dir, exp_name)
+        exp_dir = "_".join(filter(None, (exp_dir, exp_dir_tag, topology)))
 
-        vector_list = [load_snr_data(load_file) for load_file in load_file_list]
+        # Pretrained and/or Finetune
+        exp_name_tag = None if tag == "multi" and config.Q==2 else tag
+        # load_file = join(exp_dir, 
+        #                 "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr'))))
+        # vector_list.append(load_snr_data(load_file))
 
         if finetune_label == finetune_labels[0]:
+            load_file = join(exp_dir, 
+                "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr'))))
+            vector_list.append(load_snr_data(load_file))
             labels = [reg_label, ea_label, "Pretrained\n Model"]
         else:
-            labels = [reg_label, ea_label, "Finetuned\n Model"]
+            load_file = join(exp_dir, 
+                "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr', 'pretest'))))
+            vector_list.append(load_snr_data(load_file))
+            load_file = join(exp_dir, 
+                "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr'))))
+            vector_list.append(load_snr_data(load_file))
+            labels = [reg_label, ea_label, "Pretrained\n Model", "Finetuned\n Model"]
 
         # Create the dataframe
         df_list = [DataFrame({"absolute_error" :vector}).assign(finetune=finetune_label, label=label) 
@@ -879,10 +912,13 @@ def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_nam
     df = concat(df_partial_list)
     boxplot(data=df, y='absolute_error', x="finetune", hue="label")
     # plt.legend(title='Model', loc='upper right', frameon=False)
-    plt.ylabel('Absolute Error [pm]')
-    plt.xlabel('Simulation Innacuracy Scenario')
+    plt.ylabel('MAE [pm]')
+    if x_axis_label:
+        plt.xlabel('Simulation Innacuracy Scenario')
+    else:
+        plt.xlabel("")
     plt.yscale('log')
-    plt.legend(bbox_to_anchor=(1.35, 0.5), title=None, loc='center right', frameon=False)
+    plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_finetune_baseline'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
@@ -941,7 +977,82 @@ def compare_simulated_finetune_new(pretrain_exp_name=None):
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('Simulation Innacuracy Scenario')
     plt.yscale('log')
-    plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    plt.legend(bbox_to_anchor=(1.6, 0.5), title=None, loc='center right', frameon=False)
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_finetune'))))
+    plt.savefig(save_file+'.pdf', bbox_inches='tight')
+    print("Saved at:", save_file+'.pdf')
+
+
+def compare_simulation_sweep(pretrain_exp_name=None, baseline_exp_name = "baseline",
+                             reg_tag = "ls_svm", ea_tag = 'swap_diff',
+                             simulation_noise_tag=None):
+
+    reg_label = config.reg_labels[config.reg_tags.index(reg_tag)]
+    ea_label = config.ea_labels[config.ea_tags.index(ea_tag)]
+
+    finetune_options = [None, "experimental"]
+    finetune_labels = ['Simulation',"Experimental\n"]
+ 
+    if pretrain_exp_name is None:
+        pretrain_exp_name = config.exp_name
+        # if config.Q==2:
+        #     pretrain_exp_name = pretrain_exp_name.replace('_'+topology, '')
+        pretrain_exp_name = pretrain_exp_name.replace('_finetune', '')
+        pretrain_exp_name = pretrain_exp_name.replace('auto', '')
+        # if finetune is not None:
+        #     pretrain_exp_name = pretrain_exp_name.replace("_"+finetune, '')
+    
+    df_partial_list = []
+    for finetune_option, finetune_label in zip(finetune_options, finetune_labels):
+        tag = finetune_option
+        noise_tag = simulation_noise_tag if finetune_label == 'Simulation' else None
+
+        load_file_list = []
+        exp_dir = join(config.base_dir, "_".join(filter(None, (baseline_exp_name, tag))))
+        # regression
+        load_file = join(exp_dir, 
+                        "_".join(filter(None, (baseline_exp_name, tag, reg_tag, 'sweep', noise_tag))))
+        load_file_list.append(load_file)
+
+        # evolutionary algorithm
+        load_file = join(exp_dir, 
+                        "_".join(filter(None, (baseline_exp_name, tag, ea_tag, 'sweep', noise_tag))))
+        load_file_list.append(load_file)
+
+        # Pretrained or Finetune
+        if finetune_label == "Simulation":
+            exp_dir = join(config.base_dir, pretrain_exp_name)
+            load_file = join(exp_dir, 
+                            "_".join(filter(None, (pretrain_exp_name, 'sweep', noise_tag))))
+            load_file_list.append(load_file)
+            labels = [reg_label, ea_label, "Pretrained\n Model"]
+        else:
+            exp_dir = join(config.base_dir, 
+                           "_".join(filter(None, (config.exp_name, config.tag))))
+            load_file = join(exp_dir, 
+                             "_".join(filter(None, (config.exp_name, config.tag, 'sweep', "pretest"))))
+            load_file_list.append(load_file)
+            load_file = join(exp_dir, 
+                             "_".join(filter(None, (config.exp_name, config.tag, 'sweep'))))
+            load_file_list.append(load_file)
+            labels = [reg_label, ea_label, "Pretrained\n Model", "Finetuned\n Model"]
+        # load_file_list.append(load_file)
+
+        vector_list = [load_sweep_data(load_file) for load_file in load_file_list]
+
+        # Create the dataframe
+        df_list = [DataFrame({"absolute_error" :vector}).assign(finetune=finetune_label, label=label) 
+                    for label, vector in zip(labels, vector_list)]
+        # df_partial = concat(df_list, axis=1)
+        for df_instance in df_list:
+            df_partial_list.append(df_instance)
+    df = concat(df_partial_list)
+    boxplot(data=df, y='absolute_error', x="finetune", hue="label")
+    # plt.legend(title='Model', loc='upper right', frameon=False)
+    plt.ylabel('Absolute Error [pm]')
+    plt.xlabel(None)
+    plt.yscale('log')
+    plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_simulation_sweep'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
