@@ -180,12 +180,12 @@ a = 6*μ  # core radius
 n1 = 1.48  # core n
 n2 = 1.478  # cladding n
 
-Ω = np.array([0.31199667363030137, 0.3284120963457749]) # [0, 1]
+Ω = np.array([-0.6050385590422893, 0.8574601694330704])
 
 def get_saturation(ζ):
     ζ_pow = np.power(ζ, np.arange(2)[:,None])
     S = np.dot(Ω, ζ_pow)
-    S = np.tanh(S)
+    S = 1 / (1 + np.exp(-S)) # sigmoid
     return S
 
 def get_zeta(I):
