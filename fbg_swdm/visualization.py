@@ -5,7 +5,7 @@ from fbg_swdm.variables import n, p # prefixes
 import fbg_swdm.variables as config
 import fbg_swdm.simulation as sim
 from fbg_swdm.simulation import X, R, normalize, denormalize, get_I, prep_dims
-from fbg_swdm.deep_regresors import autoencoder_model
+from fbg_swdm.deep_regresors import autoencoder_model, encoder_model
 import fbg_swdm.evolutionary as ev
 from scipy.signal import sawtooth
 from pandas import DataFrame, concat, melt
@@ -19,13 +19,19 @@ plt.rcParams['figure.figsize'] = config.figsize
 plt.rcParams['figure.dpi'] = config.dpi
 plt.style.context('seaborn-paper')
 
-
+def latex_float(f):
+    float_str = "{0:.0e}".format(f)
+    if "e" in float_str:
+        base, exponent = float_str.split("e")
+        return r"${0} \times 10^{{{1}}}$".format(base, int(exponent))
+    else:
+        return float_str
 
 def mae(a, b):
     """ Mean absolute values """
     return np.mean(np.abs(a-b))
 
-def plot_datapoint(x, y, i=None, normalized=False, figname=None, **kwargs):
+def plot_datapoint(x, y, i=None, normalized=False, figname=None, dashed_individual=True, plot_y=True, legend="right", **kwargs):
     """ Plot one datapoint and compare to per sensor simulated spectra.
 
         Parameters
@@ -38,6 +44,8 @@ def plot_datapoint(x, y, i=None, normalized=False, figname=None, **kwargs):
         Instance to select. If None, the instance must be passed as directly as input.
     normalized : Bool
         Wether the input data is normalized
+    legend : str
+        Location of legend. Default is 'right'.
     """
     if "N_datapoint" in kwargs.keys(): 
         warnings.warn("N_datapoint is deprecated, use 'i' instead.")
@@ -65,17 +73,22 @@ def plot_datapoint(x, y, i=None, normalized=False, figname=None, **kwargs):
     ax.set_xticks(ax.get_xticks()[1::2])
 
     with color_palette(n_colors=config.Q):
+        linefmt = '--' if dashed_individual else '-'
         ax.plot(λ, r,
-                linestyle='--',
+                linestyle=linefmt,
                 label=["$x_"+str(i+1)+"$" for i in range(config.Q)])
-        for i in range(config.Q):
-            ax.stem(y[i, None], np.array([1]), linefmt='--', markerfmt="None",
-                basefmt="None", use_line_collection=False,
-                label="$y_"+str(i+1)+"$")
+        if plot_y:
+            for i in range(config.Q):
+                ax.stem(y[i, None], np.array([1]), linefmt='--', markerfmt="None",
+                    basefmt="None", use_line_collection=False,
+                    label="$y_"+str(i+1)+"$")
         plt.ylabel("Reflection spectrum [-]")
-        plt.xlabel("$\lambda [nm]$")
-        bbox_to_anchor = (1.15, 0.5) if plt.rcParams['figure.figsize']==(8,6) else (1.2, 0.5)
-        plt.legend(loc='right', bbox_to_anchor=bbox_to_anchor, frameon=False)
+        plt.xlabel("Wavelength [nm]")
+        if legend == "right":
+            bbox_to_anchor = (1.15, 0.5) if plt.rcParams['figure.figsize']==(8,6) else (1.2, 0.5)
+            plt.legend(loc='right', bbox_to_anchor=bbox_to_anchor, frameon=False)
+        elif legend == "inside":
+            plt.legend(loc='upper right', frameon=False)
     
     if figname:
         plt.title("")
@@ -180,7 +193,7 @@ def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=Tr
 
     g.set(xlabel=label+unit)
     if mean:
-        g.fig.text(0.8, 0.7, "$\overline{"+short_label+'}'+"= {:.2e}".format(np.mean(y))+unit+"$")
+        g.fig.text(0.8, 0.7, r"$\overline{{{}}}=$".format(short_label) + latex_float(np.mean(y))+r"${}$".format(unit))
     if figname:
         if not isinstance(figname, str):
             figname = join(config.exp_dir, 
@@ -257,7 +270,8 @@ def _gen_sweep(**kwargs):
     else:
         return _gen_sweep_multi(**kwargs)
 
-def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, subplot=False, **kwargs):
+def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, subplot=False,
+                 delta_lambda=False, legend="upper", save=True, **kwargs):
     """ Predict from data, plot prediction and target together with error per sample.
         Plot error distribution per target and optionally plot the reconstruction error.
 
@@ -275,12 +289,18 @@ def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, subplot=Fa
             Wether to plot reconstruction error.
         noise: bool or float
             Wether to add noise. If float, sets noise amplitude.
+        subplot: bool
+            Wether to separate sweep and mae plots.
+        delta_lambda: bool
+            Wether to use difference with respect to lambda_0 in sweep.
+        legend: str
+            Location of legend. Can be 'upper', 'right' or False.
+        save: bool
+            Wether to save figure.
     """
 
     autoencoder = isinstance(model, autoencoder_model)
 
-    if noise:
-        x = x + np.random.randn(*x.shape)*noise
 
     if norm:
         x = normalize(x)
@@ -294,7 +314,7 @@ def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, subplot=Fa
     else:
         y_hat = model.predict(x)
 
-    tag = predict_plot_partial(y, y_hat, noise, subplot)
+    tag = predict_plot_partial(y, y_hat, noise, subplot, save, delta_lambda, legend)
 
     if rec_error:
         if not autoencoder:
@@ -310,17 +330,20 @@ def predict_plot(model, x, y, norm=True, rec_error=False, noise=None, subplot=Fa
 
         figname = join(config.exp_dir, 
                      "_".join(filter(None, (config.exp_name, config.tag, 'sweep_rec_error',*tag))))
-        with open(figname+'.npz', 'wb') as f:
-            np.savez(f, mare=mare, y=y)
+        if save:
+            with open(figname+'.npz', 'wb') as f:
+                np.savez(f, mare=mare, y=y)
         fig.savefig(figname+'.pdf', bbox_inches='tight')
 
-def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_lambda=False):
+def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_lambda=False, legend="upper"):
     error = np.abs(y - y_hat)
     if delta_lambda:
         y -= config.λ0
         y_hat -= config.λ0
-
-    noise_tag = "noise{:.0e}".format(noise) if noise else None
+    if isinstance(noise, str):
+        noise_tag = "noise"+noise+"db"
+    else:
+        noise_tag = "noise{:.0e}".format(noise) if noise else None
     pretest_tag = 'pretest' if config.pre_test else None
     tag = (noise_tag, pretest_tag)
     figname = join(config.exp_dir, 
@@ -336,26 +359,40 @@ def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_
         a1 = plt.gca()
         a2 = a1.twinx()
 
-
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=plt.cm.Set1.colors)
+    a1.set_prop_cycle(None) # reset color cycle
     a1.plot(y/n, linewidth=2,
             label=["$y_{"+str(i)+"}$" for i in range(1, config.Q+1)])
-
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=plt.cm.Set2.colors)
+    a1.set_prop_cycle(None) # reset color cycle
     a1.plot(y_hat/n, linewidth=2, linestyle="-.",
             label=["$\hat{y}_{"+str(i)+"}$" for i in range(1, config.Q+1)]
             )
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=plt.cm.tab10.colors)
+    a1.set_prop_cycle(None) # reset color cycle
+
     if delta_lambda:
         a1.set_ylabel('$\Delta\lambda_{B}$ [nm]')
     else:
         a1.set_ylabel('$\lambda_{B}$ [nm]')
 
-    a2.plot(np.sum(error, axis=1)/p, ":k", label='MAE')
-    a2.set_ylabel('MAE [pm]', labelpad=27 if subplot else 0)
+    a2.plot(np.mean(error, axis=1)/p, ":k", label='MAE')
+    a2.set_ylabel('MAE [pm]', labelpad=27 if subplot else 10)
 
     a2.set_ylim(bottom=0)
     # a2.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    a1.set_xlabel('Instance [-]')
     a2.set_xlabel('Instance [-]')
 
-    fig.legend(loc='right', bbox_to_anchor=(1.15, 0.5), frameon=False)
+    if legend=="right":
+        fig.legend(loc='right', bbox_to_anchor=(1.2 if subplot else 1.35, 0.5), frameon=False)
+    elif legend=="upper":
+        bbox_to_anchor=(0.5, 1.2) if config.Q==2 else (0.5, 1.3)
+        fig.legend(loc='upper center', bbox_to_anchor=bbox_to_anchor, fancybox=True, shadow=True, ncol=3)
+    elif legend==False:
+        pass
+    else:
+        raise ValueError("legend must be 'upper', 'right' or False")
 
     figname = join(config.exp_dir, 
             "_".join(filter(None, (config.exp_name, config.tag, 'sweep',*tag))))
@@ -363,6 +400,7 @@ def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_
         with open(figname+'.npz', 'wb') as f:
             np.savez(f, y=y, y_hat=y_hat)
     fig.savefig(figname+'.pdf', bbox_inches='tight')
+    print("Figure saved at: " + figname+'.pdf')
     return tag
 
 def plot_sweep(model, **kwargs):
@@ -373,9 +411,12 @@ def plot_sweep(model, **kwargs):
         model : object with predict method
             Predictor.  
     """
-
-    x, y = _gen_sweep(**kwargs)
-    predict_plot(model, x, y, **kwargs)
+    noise = kwargs.pop("noise", False)
+    # TODO: This should be np.max(np.cumprod(config.A)*config.I) for serial
+    # Scale noise to be in relation to greatest peak value
+    scaled_noise = noise*np.max(config.A*config.I)
+    x, y = _gen_sweep(noise=scaled_noise, **kwargs)
+    predict_plot(model, x, y, noise=noise, **kwargs)
 
 def check_reconstruction(model, x, y, K=10, add_center=True, add_border=False, **kwargs):
     """ Predict from data. Plot worst performing reconstructions and latent representation if model is autoencoder
@@ -464,6 +505,8 @@ def check_sweep_reconstruction(model, **kwargs):
 def error_snr(model, norm=None, min_snr=0, max_snr = 40, M=10, split=True, N=300 ,**kwargs):
     db_vect = np.linspace(min_snr, max_snr, M)
     noise_vect = 10.0**(-db_vect/10.0)
+    # TODO: This should be np.max(np.cumprod(config.A)*config.I) for serial
+    # Won't change this now because would change all error_snr plots
     noise_vect *= np.max(config.A*config.I)
     error_vect = np.empty((M, N, config.Q))
     if norm is None:
@@ -515,10 +558,22 @@ def error_snr(model, norm=None, min_snr=0, max_snr = 40, M=10, split=True, N=300
 def group_boxplot(x, y, labels, title=None):
     plt.figure()
     M, N, Q = y.shape
-    data = [np.stack((np.repeat(x, N), y[:,:,i].flatten()), axis=-1) for i in range(Q)]
+    data = [np.stack((np.repeat(x, N).astype(int), y[:,:,i].flatten()), axis=-1) for i in range(Q)]
     df = concat([DataFrame(data=data[i], columns=['x', 'y']).assign(label=labels[i]) 
                 for i in range(Q)], ignore_index=True)
+    df["x"] = df['x'].astype(int)
     boxplot(data=df, x='x', y='y', hue='label')
+    plt.legend(title=title, loc='upper right', frameon=False)
+
+def group_lineplot(x, y, labels, title=None):
+    plt.figure()
+    M, N, Q = y.shape
+    data = [np.stack((np.repeat(x, N).astype(int), y[:,:,i].flatten()), axis=-1) for i in range(Q)]
+    df = concat([DataFrame(data=data[i], columns=['x', 'y']).assign(label=labels[i]) 
+                for i in range(Q)], ignore_index=True)
+    df["x"] = df['x'].astype(int)
+    sns.lineplot(data=df, x="x", y="y", hue="label", estimator=np.median,
+                  errorbar=lambda x: (np.quantile(x, 0.25), np.quantile(x, 0.75)))
     plt.legend(title=title, loc='upper right', frameon=False)
 
 def load_sweep_data(save_file):
@@ -593,7 +648,7 @@ def compare_finetune(pretrain_exp_name=None, noise_compare=False):
     print("Saved at:", save_file+'.pdf')
 
 
-def compare_finetune_snr(exp_name=None, finetune=None, db_id=None):
+def compare_finetune_snr(exp_name=None, finetune=None, db_id=None, lineplot=False):
 
     # Train
     if exp_name is not None:
@@ -644,15 +699,23 @@ def compare_finetune_snr(exp_name=None, finetune=None, db_id=None):
 
     labels = ["Train", "Pre-Finetune", "Finetune"]
     title = 'Model'
-    group_boxplot(x, y, labels, title)
-    plt.ylabel('Absolute Error [pm]')
+    if lineplot:
+        group_lineplot(x, y, labels, title)
+    else:
+        group_boxplot(x, y, labels, title)
+    plt.ylabel('MAE [pm]')
     plt.xlabel('SNR [dB]')
     plt.yscale('log')
-    save_file = join(config.exp_dir, "_".join(filter(None, (config.exp_name, tag, 'compare'))))
+    # plt.legend(bbox_to_anchor=(1.02, 0.5), loc='center left', borderaxespad=0, frameon=False)
+    # put fancy legend on top right corner
+    plt.legend(loc='upper right', frameon=False)
+    lineplot_tag = 'lineplot' if lineplot else None
+    save_file = join(config.exp_dir, "_".join(filter(None, (config.exp_name, tag,
+                                                            lineplot_tag ,'compare'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
 
-def compare_snr(tags=None , db_id=[4,-1], list_id=None, labels=None, compare=False, compare_label=None, filename=None):
+def compare_snr(tags=None , db_id=[4,-1], list_id=None, labels=None, compare=False, compare_label=None, filename=None, legend="right"):
 
     tags = config.baseline_tags if tags is None else tags
     labels = config.baseline_labels if labels is None else labels
@@ -691,15 +754,19 @@ def compare_snr(tags=None , db_id=[4,-1], list_id=None, labels=None, compare=Fal
             except UnboundLocalError:
                 y = error_vect
 
-    x = x[db_id]
+    x = x[db_id].astype(int)
     title = 'Model'
     group_boxplot(x, y, labels, title)
-    plt.ylabel('Absolute Error [pm]')
+    plt.ylabel('MAE [pm]')
     plt.xlabel('SNR [dB]')
     plt.yscale('log')
     save_file = join(config.base_dir, filename)
-    plt.legend(bbox_to_anchor=(1.02, 0.5), loc='center left', borderaxespad=0, frameon=False)
+    if legend=="right":
+        plt.legend(loc='right', bbox_to_anchor=(1.2 , 0.5), frameon=False)	
+    else:
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), fancybox=True, shadow=True, ncol=3)
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
+    print("Saved at:", save_file+'.pdf')
 
 def print_snr(tags=None , list_id=None, labels=None):
 
@@ -712,7 +779,7 @@ def print_snr(tags=None , list_id=None, labels=None):
         save_file = join(config.exp_dir, 
                      "_".join(filter(None, (config.exp_name, tag, 'error_snr'))))
         with np.load(save_file+'.npz') as f:
-            db_vect = f['db_vect']
+            db_vect = f['db_vect'].astype(int)
             error_vect = f['error_vect']
 
             plt.figure()
@@ -721,6 +788,7 @@ def print_snr(tags=None , list_id=None, labels=None):
             plt.ylabel('Absolute Error [pm]')
             plt.xlabel('SNR [dB]')
             plt.yscale('log')
+            plt.legend(bbox_to_anchor=(1.02, 0.5), loc='center left', borderaxespad=0, frameon=False)
             plt.savefig(save_file+'_split.pdf', bbox_inches='tight')
 
             error_vect = np.mean(error_vect, axis=-1, keepdims=True)
@@ -732,17 +800,31 @@ def print_snr(tags=None , list_id=None, labels=None):
             plt.yscale('log')
             plt.savefig(save_file+'.pdf', bbox_inches='tight')
 
-def print_sweep(noise=False, subplot=False, delta_lambda=False):
+def print_sweep(noise=False, subplot=False, delta_lambda=False, legend="upper"):
 
     noise_tag = "noise{:.0e}".format(noise) if noise else None
+    pretest_tag = "pretest" if config.pre_test else ""
     save_file = join(config.exp_dir, 
-                    "_".join(filter(None, (config.exp_name, config.tag, 'sweep', noise_tag))))
+                    "_".join(filter(None, (config.exp_name, config.tag, 'sweep',
+                                           pretest_tag, noise_tag))))
+    print("Loading from file at: " + save_file + ".npz" )
     with np.load(save_file+'.npz') as f:
         y = f["y"]
         y_hat = f["y_hat"]
 
         predict_plot_partial(y, y_hat, noise, subplot, save=False,
-                             delta_lambda=delta_lambda)
+                             delta_lambda=delta_lambda, legend=legend)
+
+def reprint_sweep(noise=False, subplot=False, delta_lambda=False):
+    noise_tag = "noise{:.0e}".format(noise) if noise else None
+    load_file = join(config.exp_dir, "checkpoint", "last.ckpt")
+    if "autoencoder" in config.exp_dir:
+        model = autoencoder_model.load_from_checkpoint(load_file, strict=False)
+    else:
+        model = encoder_model.load_from_checkpoint(load_file, strict=False)
+
+    predict_plot(model, noise=noise, subplot=subplot, delta_lambda=delta_lambda)
+
 
 def load_snr_data(load_file, db_id=4):
     with np.load(load_file+'.npz') as f:
@@ -751,7 +833,7 @@ def load_snr_data(load_file, db_id=4):
     return error_vect
 
 
-def compare_simulated_finetune(pretrain_exp_name=None):
+def compare_simulated_finetune(pretrain_exp_name=None, legend="right"):
 
     finetune_options = ["attenuation", "spectral",  None]
     finetune_labels = ["Attenuation", "Spectral Profile", "Attenuation and\n Spectral Profile "]
@@ -806,10 +888,13 @@ def compare_simulated_finetune(pretrain_exp_name=None):
     df = concat(df_partial_list)
     boxplot(data=df, y='absolute_error', x="finetune", hue="label")
     # plt.legend(title='Model', loc='upper right', frameon=False)
-    plt.ylabel('Absolute Error [pm]')
+    plt.ylabel('MAE [pm]')
     plt.xlabel('Simulation Innacuracy Scenario')
     plt.yscale('log')
-    plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    if legend == "right":
+        plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    elif legend == "upper":
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), fancybox=True, shadow=True, ncol=4)
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_finetune'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
@@ -817,7 +902,7 @@ def compare_simulated_finetune(pretrain_exp_name=None):
 def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_name = "baseline",
                                         reg_tag = "ls_svm", ea_tag = 'swap_diff',
                                         finetune_option_dict=None, x_axis_label=True, 
-                                        noise=False):
+                                        noise=False, legend="right"):
 
     reg_label = config.reg_labels[config.reg_tags.index(reg_tag)]
     ea_label = config.ea_labels[config.ea_tags.index(ea_tag)]
@@ -893,7 +978,7 @@ def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_nam
             load_file = join(exp_dir, 
                 "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr'))))
             vector_list.append(load_snr_data(load_file))
-            labels = [reg_label, ea_label, "Pretrained\n Model"]
+            labels = [reg_label, ea_label, "Pretrained\n CNN-AE"]
         else:
             load_file = join(exp_dir, 
                 "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr', 'pretest'))))
@@ -901,7 +986,7 @@ def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_nam
             load_file = join(exp_dir, 
                 "_".join(filter(None, (exp_name, exp_name_tag, topology, 'error_snr'))))
             vector_list.append(load_snr_data(load_file))
-            labels = [reg_label, ea_label, "Pretrained\n Model", "Finetuned\n Model"]
+            labels = [reg_label, ea_label, "Pretrained\n CNN-AE", "Finetuned\n CNN-AE"]
 
         # Create the dataframe
         df_list = [DataFrame({"absolute_error" :vector}).assign(finetune=finetune_label, label=label) 
@@ -918,13 +1003,16 @@ def compare_simulated_finetune_baseline(pretrain_exp_name=None, baseline_exp_nam
     else:
         plt.xlabel("")
     plt.yscale('log')
-    plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    if legend=="right":
+        plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    elif legend=="upper":
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), fancybox=True, shadow=True, ncol=4)
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_finetune_baseline'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
 
 
-def compare_simulated_finetune_new(pretrain_exp_name=None):
+def compare_simulated_finetune_new(pretrain_exp_name=None, legend="right"):
 
     finetune_options = ["attenuation", "spectral", "multi"]
     finetune_labels = ["Attenuation", "Profile", "Attenuation \n & Profile "]
@@ -977,7 +1065,10 @@ def compare_simulated_finetune_new(pretrain_exp_name=None):
     plt.ylabel('Absolute Error [pm]')
     plt.xlabel('Simulation Innacuracy Scenario')
     plt.yscale('log')
-    plt.legend(bbox_to_anchor=(1.6, 0.5), title=None, loc='center right', frameon=False)
+    if legend == "right":
+        plt.legend(bbox_to_anchor=(1.6, 0.5), title=None, loc='center right', frameon=False)
+    elif legend == "upper":
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), fancybox=True, shadow=True, ncol=3)
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_finetune'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
@@ -985,7 +1076,7 @@ def compare_simulated_finetune_new(pretrain_exp_name=None):
 
 def compare_simulation_sweep(pretrain_exp_name=None, baseline_exp_name = "baseline",
                              reg_tag = "ls_svm", ea_tag = 'swap_diff',
-                             simulation_noise_tag=None):
+                             simulation_noise_tag=None, legend="right"):
 
     reg_label = config.reg_labels[config.reg_tags.index(reg_tag)]
     ea_label = config.ea_labels[config.ea_tags.index(ea_tag)]
@@ -1025,7 +1116,7 @@ def compare_simulation_sweep(pretrain_exp_name=None, baseline_exp_name = "baseli
             load_file = join(exp_dir, 
                             "_".join(filter(None, (pretrain_exp_name, 'sweep', noise_tag))))
             load_file_list.append(load_file)
-            labels = [reg_label, ea_label, "Pretrained\n Model"]
+            labels = [reg_label, ea_label, "Pretrained\n CNN-AE"]
         else:
             exp_dir = join(config.base_dir, 
                            "_".join(filter(None, (config.exp_name, config.tag))))
@@ -1035,7 +1126,7 @@ def compare_simulation_sweep(pretrain_exp_name=None, baseline_exp_name = "baseli
             load_file = join(exp_dir, 
                              "_".join(filter(None, (config.exp_name, config.tag, 'sweep'))))
             load_file_list.append(load_file)
-            labels = [reg_label, ea_label, "Pretrained\n Model", "Finetuned\n Model"]
+            labels = [reg_label, ea_label, "Pretrained\n CNN-AE", "Finetuned\n CNN-AE"]
         # load_file_list.append(load_file)
 
         vector_list = [load_sweep_data(load_file) for load_file in load_file_list]
@@ -1049,10 +1140,13 @@ def compare_simulation_sweep(pretrain_exp_name=None, baseline_exp_name = "baseli
     df = concat(df_partial_list)
     boxplot(data=df, y='absolute_error', x="finetune", hue="label")
     # plt.legend(title='Model', loc='upper right', frameon=False)
-    plt.ylabel('Absolute Error [pm]')
+    plt.ylabel('MAE [pm]')
     plt.xlabel(None)
     plt.yscale('log')
-    plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    if legend=="right":
+        plt.legend(bbox_to_anchor=(1.45, 0.5), title=None, loc='center right', frameon=False)
+    elif legend=="upper":
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), fancybox=True, shadow=True, ncol=4)
     save_file = join(exp_dir, "_".join(filter(None, (config.exp_name, config.tag, 'compare_simulation_sweep'))))
     plt.savefig(save_file+'.pdf', bbox_inches='tight')
     print("Saved at:", save_file+'.pdf')
