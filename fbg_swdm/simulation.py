@@ -149,7 +149,7 @@ def R(*args, **kwargs):
     elif simulation == 'pseudosimulated':
         return pseudosimulated_R(*args, **kwargs)
     else:
-        raise ValueError("simulation must be in {'gaussian','true'}")
+        raise ValueError("simulation must be in {'gaussian','true', 'pseudosimulated'}")
 
 # ---------------------------------------------------------------------------- #
 #                                Data Generation                               #
