@@ -18,26 +18,22 @@ $$
 
 Where *I<sub>i</sub>* is the peak reflectance, *λ<sub>Bi</sub>* is the Bragg's wavelength and *Δλ<sub>Bi</sub>* is the FWHM bandwidth. This approximation is depicted in figure \ref{fig:FBG_spectra} for the matching values of *I<sub>i</sub>*, *λ<sub>Bi</sub>* and *Δλ<sub>Bi</sub>*.
 
-For the parallel WDM FBG setup, the problem consists in finding the spectral shifts of each sensor even when there is overlapping of their spectra, given that there is sufficient difference between the spectral profiles either in I<sub>i</sub>, in Δλ<sub>Bi</sub>, or in both. We can formulate the problem in a more formal mathematical matter as follows. Given an array of size *N* with spectral profiles characterized by equation \ref{eqn:apo_fbg} with parameters *λ<sub>Bi</sub>*, *I<sub>i</sub>* and *Δλ<sub>Bi</sub>*, we wish to obtain an estimation ![\hat{y}](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Chat%7By%7D)
- of ![y = \{\lambda_{B_i}\}_{i\in[1,...,N]}](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+y+%3D+%5C%7B%5Clambda_%7BB_i%7D%5C%7D_%7Bi%5Cin%5B1%2C...%2CN%5D%7D) (with known *I<sub>i</sub>* and *Δλ<sub>Bi</sub>* for each FBG) from *x*, a discrete observation of *M* points over *λ \in [λ<sub>0</sub> - Δλ/2, λ<sub>0</sub>+Δλ/2* of the observed spectrum *X(λ)* characterized as
+For the parallel WDM FBG setup, the problem consists in finding the spectral shifts of each sensor even when there is overlapping of their spectra, given that there is sufficient difference between the spectral profiles either in I<sub>i</sub>, in Δλ<sub>Bi</sub>, or in both. We can formulate the problem in a more formal mathematical matter as follows. Given an array of size *N* with spectral profiles characterized by equation \ref{eqn:apo_fbg} with parameters *λ<sub>Bi</sub>*, *I<sub>i</sub>* and *Δλ<sub>Bi</sub>*, we wish to obtain an estimation $\hat{y}$
+ of $y = \{\lambda_{B_i}\}_{i\in[1,...,N]}$ (with known *I<sub>i</sub>* and *Δλ<sub>Bi</sub>* for each FBG) from *x*, a discrete observation of *M* points over *λ \in [λ<sub>0</sub> - Δλ/2, λ<sub>0</sub>+Δλ/2* of the observed spectrum *X(λ)* characterized as
 
-<!-- \begin{equation}
+$$
     X(λ) = \sum_{i=1}^N R_i(λ)
-\end{equation} -->
-
-![formula](https://render.githubusercontent.com/render/math?math=X(\lambda)%20=%20\sum_{i=1}^N%20R_i(\lambda))
+$$
 
 # Methods
 
-One approach to retrieve the peak location of overlapping FBGs is through evolutionary algorithms (EA). Given that we have a good approximation of the discrete spectrum ![\hat{x} = f(\hat{y})](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Chat%7Bx%7D+%3D+f%28%5Chat%7By%7D%29), we wish to find ![\hat{y} ](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Chat%7By%7D+) that yields an approximated discrete spectrum ![\hat{x} ](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Chat%7Bx%7D+) similar to the observed discrete spectrum *x*, generally quantified by the ![\ell_1](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Cell_1) or ![\ell_2](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Cell_2) norm. The optimization problem can be formulated as
-![\hat{y} = \min_{\hat{y}} \mathcal{L}(x, \hat{x})](https://render.githubusercontent.com/render/math?math=%5Cdisplaystyle+%5Chat%7By%7D+%3D+%5Cmin_%7B%5Chat%7By%7D%7D+%5Cmathcal%7BL%7D%28x%2C+%5Chat%7Bx%7D%29)
-where ![\mathcal{L}(\cdot, \cdot) ](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Cmathcal%7BL%7D%28%5Ccdot%2C+%5Ccdot%29+) is a loss function that quantifies the dissimilarity between its inputs.
+One approach to retrieve the peak location of overlapping FBGs is through evolutionary algorithms (EA). Given that we have a good approximation of the discrete spectrum $\hat{x} = f(\hat{y})$, we wish to find $\hat{y}$ that yields an approximated discrete spectrum $\hat{x}$ similar to the observed discrete spectrum *x*, generally quantified by the $\ell_1$ or $\ell_2$ norm. The optimization problem can be formulated as
+$\hat{y} = \min_{\hat{y}} \mathcal{L}(x, \hat{x})$
+where $\mathcal{L}(\cdot, \cdot)$ is a loss function that quantifies the dissimilarity between its inputs.
 
-The other approach to solve this problem is to build a regression model \cite{stat_learn}. In this approach we wish to invert the function *x=f(y)* that generates the observed spectrum. Since it is not possible to find an analytical solution to the problem, we can find an approximation given by a parameterized function ![g_\theta(x)=\hat{y}\approx y = f^{-1}(x)](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+g_%5Ctheta%28x%29%3D%5Chat%7By%7D%5Capprox+y+%3D+f%5E%7B-1%7D%28x%29), characterized by the parameter vector ![\theta](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Ctheta). The optimal vector ![\theta](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Ctheta) is found by minimizing a loss function over an *n*-sized paired dataset ![Y=\{y_i\}_{i\in[1,n]}, X=\{x_i\}_{i\in[1,n]}](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+Y%3D%5C%7By_i%5C%7D_%7Bi%5Cin%5B1%2Cn%5D%7D%2C+X%3D%5C%7Bx_i%5C%7D_%7Bi%5Cin%5B1%2Cn%5D%7D),  where *x<sub>i</sub>=f(y<sub>i</sub>)*. The loss function quantifies the difference between the predictions and the actual values, usually through the ![\ell_1](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Cell_1) or ![\ell_2](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+%5Cell_2) norm. This is formalized as
-<!-- $$\theta = \min_{\theta} \mathcal{L}(Y, g_\theta(X))$$ -->
+The other approach to solve this problem is to build a regression model \cite{stat_learn}. In this approach we wish to invert the function *x=f(y)* that generates the observed spectrum. Since it is not possible to find an analytical solution to the problem, we can find an approximation given by a parameterized function $g_\theta(x)=\hat{y}\approx y = f^{-1}(x)$, characterized by the parameter vector $\theta$. The optimal vector $\theta$ is found by minimizing a loss function over an *n*-sized paired dataset $Y=\{y_i\}_{i\in[1,n]}, X=\{x_i\}_{i\in[1,n]}$,  where *x<sub>i</sub>=f(y<sub>i</sub>)*. The loss function quantifies the difference between the predictions and the actual values, usually through the $\ell_1$ or $\ell_2$ norm. This is formalized as
 
-
-![formula](https://render.githubusercontent.com/render/math?math=\theta%20=%20\min_{\theta}%20\mathcal{L}(Y,%20g_\theta(X)))
+$$\theta = \min_{\theta} \mathcal{L}(Y, g_\theta(X))$$
 
 This optimization problem can be solved either through gradient descend or by finding an analytical solution under certain formulations. This approach has lower accuracy compared to EA but has an inference time that is significantly shorter since there is a previous learning step.
 
