@@ -12,12 +12,9 @@ Conventionally a WDM FBG network requires no overlap on the FBGs spectra for con
 
 The FBG spectral profile characterized by equation \ref{eq:fbg}, can be reasonably approximated to a Gaussian shape \cite{gauss}, which is characterized as
 
-<!-- \begin{equation}
-\label{eqn:apo_fbg}
+$$
 R_i(\lambda) = I_{i}e^{-4 ln(2)\left[\frac{\lambda - \lambda_{Bi}}{\Delta\lambda_{Bi}}\right]^2}
-\end{equation} -->
-
-![R_i(\lambda) = I_{i}e^{-4 ln(2)\left[\frac{\lambda - \lambda_{Bi}}{\Delta\lambda_{Bi}}\right]^2}](https://render.githubusercontent.com/render/math?math=%5Ctextstyle+R_i%28%5Clambda%29+%3D+I_%7Bi%7De%5E%7B-4+ln%282%29%5Cleft%5B%5Cfrac%7B%5Clambda+-+%5Clambda_%7BBi%7D%7D%7B%5CDelta%5Clambda_%7BBi%7D%7D%5Cright%5D%5E2%7D)
+$$
 
 Where *I<sub>i</sub>* is the peak reflectance, *λ<sub>Bi</sub>* is the Bragg's wavelength and *Δλ<sub>Bi</sub>* is the FWHM bandwidth. This approximation is depicted in figure \ref{fig:FBG_spectra} for the matching values of *I<sub>i</sub>*, *λ<sub>Bi</sub>* and *Δλ<sub>Bi</sub>*.
 
