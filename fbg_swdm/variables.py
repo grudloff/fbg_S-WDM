@@ -147,7 +147,7 @@ dpi = 216
 pre_test=False
 
 # prefixes
-class constants:
+class constant:
     μ = 10**-6  # micro
     n = 10**-9  # nano
     p = 10**-12  # pico
