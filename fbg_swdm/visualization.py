@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import warnings
 from fbg_swdm.variables import n, p # prefixes
 import fbg_swdm.variables as config
+from fbg_swdm.variables import constant
 import fbg_swdm.simulation as sim
 from fbg_swdm.simulation import X, R, normalize, denormalize, get_I, prep_dims
 from fbg_swdm.deep_regresors import autoencoder_model, encoder_model
@@ -64,8 +65,8 @@ def plot_datapoint(x, y, i=None, normalized=False, figname=None, dashed_individu
         y = sim.denormalize(y=y)
     A_b, λ, A, Δλ, I, Δn_dc = prep_dims(y, config.λ, A, config.Δλ, config.I, config.Δn_dc)
     r = R(A_b, λ, A, Δλ, I, Δn_dc)
-    λ = λ/config.n
-    y = y/config.n
+    λ = λ/constant.n
+    y = y/constant.n
         
     fig, ax = plt.subplots()
     plt.title("Datapoint visualization")    
@@ -106,8 +107,8 @@ def plot_sweep_datapoint(i=0, N=300, **kwargs):
 
 def _train_test_dataframe(y_train, y_test, column_names):
     # Create dataframe with column specifying if sample is train or test
-    df_train = DataFrame(data=y_train/config.n, columns=column_names).assign(label='Train')
-    df_test = DataFrame(data=y_test/config.n, columns=column_names).assign(label='Test')
+    df_train = DataFrame(data=y_train/constant.n, columns=column_names).assign(label='Train')
+    df_test = DataFrame(data=y_test/constant.n, columns=column_names).assign(label='Test')
     df = concat([df_train, df_test], ignore_index=True)
     return df
 
@@ -137,7 +138,7 @@ def plot(X_train, y_train, X_test=None, y_test=None, plot_diff=False):
     
     labels = ['$y_'+str(i+1)+"[nm]$" for i in range(config.Q)]
     if y_test is None:
-        df = DataFrame(data=y_train/config.n, 
+        df = DataFrame(data=y_train/constant.n, 
                        columns=labels).assign(label='Train')
     else:
         df = _train_test_dataframe(y_train, y_test, labels)
@@ -155,7 +156,7 @@ def plot(X_train, y_train, X_test=None, y_test=None, plot_diff=False):
                   for i,j in zip(np.repeat(indices, range(config.Q-1, -1, -1)),
                   np.concatenate(tuple(indices[i::] for i in range(1, config.Q)), axis=-1))]
         if X_test is None:
-            df = DataFrame(data=diff_y_train/config.n, 
+            df = DataFrame(data=diff_y_train/constant.n, 
                         columns=labels).assign(label='Train')
         else:
             diff_y_test = _comb_func(y_test)
@@ -470,13 +471,13 @@ def check_reconstruction(model, x, y, K=10, add_center=True, add_border=False, *
         a1.plot(config.λ/n, x[i], label='$x$')
         a1.set_ylabel('$x$')
         for j in range(config.Q):
-            a1.stem(y[i, j, None]/config.n, np.max(x[i], keepdims=True), linefmt='-', markerfmt="None",
+            a1.stem(y[i, j, None]/constant.n, np.max(x[i], keepdims=True), linefmt='-', markerfmt="None",
                 basefmt="None", use_line_collection=False,
                 label="$y_"+str(j+1)+"$")
         if evolutionary or autoencoder:
             a1.plot(config.λ/n, x_hat[i], label="$\hat{x}$")
         for j in range(config.Q):
-            a1.stem(y_hat[i, j, None]/config.n, np.max(x[i], keepdims=True), linefmt='--', markerfmt="None",
+            a1.stem(y_hat[i, j, None]/constant.n, np.max(x[i], keepdims=True), linefmt='--', markerfmt="None",
                 basefmt="None", use_line_collection=False,
                 label="$\hat{y}_"+str(j+1)+"$")
         if not evolutionary:

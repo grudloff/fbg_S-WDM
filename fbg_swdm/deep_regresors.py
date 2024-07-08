@@ -19,6 +19,7 @@ from scipy.signal import butter
 
 import fbg_swdm.simulation as sim
 import fbg_swdm.variables as config
+from fbg_swdm.variables import constant
 
 # ---------------------------- Model Loading Utils --------------------------- #
 
@@ -170,7 +171,7 @@ def test_kernel(vect):
 def get_kernel_sizes(n_layers, target, verbose=False):
     # if target is in nm
     if isinstance(target, float):
-        target = int(target*config.N/(config.Δ*2)*config.n)
+        target = int(target*config.N/(config.Δ*2)*constant.n)
 
     # init all kernels in 3 for each layer
     kernel_vect = [3]*n_layers

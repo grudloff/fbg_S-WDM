@@ -4,9 +4,11 @@ import numpy as np
 from numpy import log as ln
 from numpy import exp as exp
 import fbg_swdm.variables as config
+from fbg_swdm.variables import constant
 from math import sqrt
 from functools import wraps
 from scipy.ndimage import shift
+
 
 # ---------------------------------------------------------------------------- #
 #                                  Decorators                                  #
@@ -65,7 +67,7 @@ def partial_R(λb, λ, Δλ, ζ, Δn_dc):
         raise ValueError("Both Δλ and ζ should be None to use precomputed parameters.")
     else:
         S = config.get_saturation(ζ)
-        Δn = Δλ*config.n_eff/config.λ0/config.η/np.sqrt(1 + (config.π/ζ)**2)/S
+        Δn = Δλ*constant.n_eff/config.λ0/config.η/np.sqrt(1 + (config.π/ζ)**2)/S
         κ = config.π*Δn/config.λ0*config.η
         L = ζ/κ  # length
     

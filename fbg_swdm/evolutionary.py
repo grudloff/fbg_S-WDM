@@ -21,6 +21,8 @@ from itertools import permutations
 from fbg_swdm.simulation import X, normalize, denormalize
 import numpy as np
 import fbg_swdm.variables as config
+from fbg_swdm.variables import constant
+
 import random
 
 from sklearn.mixture import GaussianMixture
@@ -493,7 +495,7 @@ class genetic_algorithm_binary(GeneticAlgo):
 class genetic_algorithm_real(GeneticAlgo):
     def __init__(self, pop_size=20, max_generation=500, Q=None,
                  threshold=0.1, patience=200, bounds=None, p_crossover=0.2,
-                 std=0.01*config.n, swap=False):
+                 std=0.01*constant.n, swap=False):
         super().__init__(pop_size, max_generation, Q, threshold, patience, bounds)
         self.p_crossover = p_crossover
         self.std = std

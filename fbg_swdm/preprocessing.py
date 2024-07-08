@@ -5,6 +5,7 @@ from scipy.signal import find_peaks, peak_widths
 import copy
 
 import fbg_swdm.variables as config
+from fbg_swdm.variables import constant
 
 # ---------------------------------------------------------------------------- #
 #                               General Utilities                              #
@@ -48,7 +49,7 @@ def get_mask_from_wavelength(x, y, proportion=1.1):
     Returns:
         ndarray: A 2D masked array
     """
-    y = y*config.n # to [nm]
+    y = y*constant.n # to [nm]
     mask = np.zeros_like(x, dtype='bool')
     for i in np.arange(len(x)):
         for gamma, delta in zip(y[i], config.Δλ):
