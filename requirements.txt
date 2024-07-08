@@ -1,8 +1,10 @@
 numpy
 matplotlib
 scikit-learn
+pandas
 leap_ec
-lssvr
-pytorch
+lssvr @ git+https://github.com/grudloff/lssvr
+scipy
+torch
 pytorch-lightning
 optuna
