@@ -26,4 +26,4 @@ dependencies:
   - pip:
     - leap_ec
     - ofiber
-    - lssvr
+    - lssvr @ git+https://github.com/grudloff/lssvr
