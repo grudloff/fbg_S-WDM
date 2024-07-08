@@ -164,15 +164,15 @@ M = 10000  # numbers of sampling points of test sweep
 # FBG Characterization
 Q = 2  # Number of FBGs
 A = np.array([1, 0.5])  # Attenuation
-Δλ = np.array([0.2*n, 0.2*n])  # Linewidth
-λ0 = 1550*n  # Central Wavelength
+Δλ = np.array([0.2*constant.n, 0.2*constant.n])  # Linewidth
+λ0 = 1550*constant.n  # Central Wavelength
 I = np.array([0.9, 0.9])  # peak reflectivities
 I_max = 0.99
 I_min = 0.4 #
 #S = κ*L in [1,3] ranging from saturated to strong grating
 Δn_dc = np.array([0, 0])
 
-Δ = 2*n  # Range of Wavelength change
+Δ = 2*constant.n  # Range of Wavelength change
 λ = np.linspace(λ0 - Δ, λ0 + Δ, N)  # Wavelength
 portion = 0.6 # portion of Δ 
 bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
@@ -256,5 +256,5 @@ def load_data(filename=None, to_nano=True):
         X=f['X']
         y=f['y']
     if to_nano ==True:
-        y = y*n
+        y = y*constant.n
     return X, y
