@@ -39,7 +39,7 @@ $$\theta = \min_{\theta} \mathcal{L}(Y, g_\theta(X))$$
 
 This optimization problem can be solved either through gradient descend or by finding an analytical solution under certain formulations. This approach has lower accuracy compared to EA but has an inference time that is significantly shorter since there is a previous learning step.
 
-# Proposed Autoencoder base model
+# Proposed model
 
 The motivation behind this architecture is to ease the requirement for labeled data for training. The proposed model allows for training solely from the spectra without the need for spectral position information. This is achieved by minimizing the reconstruction error between observed and reconstructed spectra ($x$ and $\hat{x}$ in the figure below). The model incorporates a specially designed intermediate representation ($\tilde{y}$), particularly of dirac deltas that represent the sensor spectral position. This enhances the alignment of this intermediate representation and enables model convergence in the unsupervised scenario. This enables the model to be trained in an unsupervised manner using only spectral measurements, without requiring the FBG spectral positions.
 
