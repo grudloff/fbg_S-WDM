@@ -121,7 +121,7 @@ def setattrs(**kwargs):
             x_05 = np.load(join("data", "fbg05.npz"))['spectra']
             x_05 = x_05-np.min(x_05)
             x_05 = filt(x_05)
-            x_09 = np.load(join("data", "fbg09.npz")['spectra']
+            x_09 = np.load(join("data", "fbg09.npz"))['spectra']
             x_09 = x_09-np.min(x_09)
             x_09 = filt(x_09)
             reference = np.stack([x_05, x_09])
