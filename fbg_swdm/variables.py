@@ -178,7 +178,7 @@ portion = 0.6 # portion of Δ
 bounds = (λ0 - portion*Δ, λ0 + portion*Δ)
 
 # fiber characteristics
-a = 6*μ  # core radius
+a = 6*constant.μ  # core radius
 n1 = 1.48  # core n
 n2 = 1.478  # cladding n
 
