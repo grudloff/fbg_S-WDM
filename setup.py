@@ -8,7 +8,7 @@ setup(
     version='1.0',
     packages=find_packages(),
     install_requires=["numpy", "matplotlib", "scikit-learn", "pandas",
-                      "leap_ec", "lssvr @ git+https://github.com/grudloff/lssvr",
+                      "leap_ec==0.7.0", "lssvr @ git+https://github.com/grudloff/lssvr",
                       "scipy", "torch", "pytorch-lightning", "ofiber"],
     include_package_data=True
 )

@@ -2,7 +2,7 @@ numpy
 matplotlib
 scikit-learn
 pandas
-leap_ec
+leap_ec==0.7.0
 lssvr @ git+https://github.com/grudloff/lssvr
 scipy
 torch
