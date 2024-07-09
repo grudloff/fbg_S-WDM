@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
-from fbg_swdm.variables import n, p # prefixes
 import fbg_swdm.variables as config
 from fbg_swdm.variables import constant
 import fbg_swdm.simulation as sim
@@ -203,7 +202,7 @@ def plot_dist(y, label='Absolute Error ', short_label='AE', unit='[pm]' ,mean=Tr
             np.savez(f, y=y)
         g.fig.savefig(figname+'.pdf', bbox_inches='tight')
 
-def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=None, **kwargs):
+def _gen_sweep_pair(d=0.6*constant.n, N=300, noise=False, invert=False, N_datapoint=None, **kwargs):
     """ Generate simulated data of one fixed sensor and another in a sweep.
 
     Parameters
@@ -239,7 +238,7 @@ def _gen_sweep_pair(d=0.6*n, N=300, noise=False, invert=False, N_datapoint=None,
         x = x + np.random.randn(*x.shape)*noise
     return x, y
 
-def _gen_sweep_multi(d=0.6*n, N=300, N_datapoint=None, **kwargs):
+def _gen_sweep_multi(d=0.6*constant.n, N=300, N_datapoint=None, **kwargs):
     """ Generate simulated data of sweeping pattern that provides 
         roughly uniform differences between targets.
 
