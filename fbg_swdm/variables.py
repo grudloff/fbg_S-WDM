@@ -118,10 +118,10 @@ def setattrs(**kwargs):
     if simulation=="pseudosimulated":
         global reference
         if reference is None:
-            x_05 = np.load(r"data\fbg05.npz")['spectra']
+            x_05 = np.load(join("data", "fbg05.npz"))['spectra']
             x_05 = x_05-np.min(x_05)
             x_05 = filt(x_05)
-            x_09 = np.load(r"data\fbg09.npz")['spectra']
+            x_09 = np.load(join("data", "fbg09.npz")['spectra']
             x_09 = x_09-np.min(x_09)
             x_09 = filt(x_09)
             reference = np.stack([x_05, x_09])
@@ -248,7 +248,7 @@ set_mode_properties()
 φN = 10 # Number of points for phase sweep
 
 reference=None
-data_filename = "data\experimental_data.npz"
+data_filename = join("data", "experimental_data.npz")
 
 def load_data(filename=None, to_nano=True):
     filename = data_filename if filename is None else filename
