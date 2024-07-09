@@ -361,11 +361,11 @@ def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_
 
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=plt.cm.Set1.colors)
     a1.set_prop_cycle(None) # reset color cycle
-    a1.plot(y/n, linewidth=2,
+    a1.plot(y/constant.n, linewidth=2,
             label=["$y_{"+str(i)+"}$" for i in range(1, config.Q+1)])
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=plt.cm.Set2.colors)
     a1.set_prop_cycle(None) # reset color cycle
-    a1.plot(y_hat/n, linewidth=2, linestyle="-.",
+    a1.plot(y_hat/constant.n, linewidth=2, linestyle="-.",
             label=["$\hat{y}_{"+str(i)+"}$" for i in range(1, config.Q+1)]
             )
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=plt.cm.tab10.colors)
@@ -467,14 +467,14 @@ def check_reconstruction(model, x, y, K=10, add_center=True, add_border=False, *
         plt.figure()
         plt.xlabel('$\lambda [nm]$')
         a1 = plt.gca()
-        a1.plot(config.λ/n, x[i], label='$x$')
+        a1.plot(config.λ/constant.n, x[i], label='$x$')
         a1.set_ylabel('$x$')
         for j in range(config.Q):
             a1.stem(y[i, j, None]/constant.n, np.max(x[i], keepdims=True), linefmt='-', markerfmt="None",
                 basefmt="None", use_line_collection=False,
                 label="$y_"+str(j+1)+"$")
         if evolutionary or autoencoder:
-            a1.plot(config.λ/n, x_hat[i], label="$\hat{x}$")
+            a1.plot(config.λ/constant.n, x_hat[i], label="$\hat{x}$")
         for j in range(config.Q):
             a1.stem(y_hat[i, j, None]/constant.n, np.max(x[i], keepdims=True), linefmt='--', markerfmt="None",
                 basefmt="None", use_line_collection=False,
@@ -482,7 +482,7 @@ def check_reconstruction(model, x, y, K=10, add_center=True, add_border=False, *
         if not evolutionary:
             a2 = a1.twinx()
             a2._get_lines.prop_cycler = a1._get_lines.prop_cycler # set same color cycler
-            a2.plot(config.λ/n, latent[i].T, label=[r"$\tilde{y}_{"+str(i+1)+"}$" for i in range(config.Q)])
+            a2.plot(config.λ/constant.n, latent[i].T, label=[r"$\tilde{y}_{"+str(i+1)+"}$" for i in range(config.Q)])
             a2.set_ylabel(r'$\tilde{y}$')
 
         lines, labels = a1.get_legend_handles_labels()
