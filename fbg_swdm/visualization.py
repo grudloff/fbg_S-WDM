@@ -348,7 +348,7 @@ def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_
     tag = (noise_tag, pretest_tag)
     figname = join(config.exp_dir, 
                 "_".join(filter(None, (config.exp_name, config.tag, 'sweep_error_dist',*tag)))) 
-    plot_dist(error/p, mean=True, figname=figname)
+    plot_dist(error/constant.p, mean=True, figname=figname)
 
     if subplot:
         fig, (a1, a2) = plt.subplots(2, 1)
@@ -376,7 +376,7 @@ def predict_plot_partial(y, y_hat, noise=False, subplot=False, save=True, delta_
     else:
         a1.set_ylabel('$\lambda_{B}$ [nm]')
 
-    a2.plot(np.mean(error, axis=1)/p, ":k", label='MAE')
+    a2.plot(np.mean(error, axis=1)/constant.p, ":k", label='MAE')
     a2.set_ylabel('MAE [pm]', labelpad=27 if subplot else 10)
 
     a2.set_ylim(bottom=0)
