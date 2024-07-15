@@ -8,4 +8,5 @@ scipy
 torch
 pytorch-lightning
 optuna
+scikit-optimize
 ofiber
