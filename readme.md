@@ -15,7 +15,7 @@ Conventionally a WDM FBG network requires no overlap on the FBGs spectra for con
 
 The FBG spectral profile, can be reasonably approximated to a Gaussian shape. This approximation is depicted in the figure below, for the matching values of *I<sub>i</sub>*, *λ<sub>Bi</sub>* and *Δλ<sub>Bi</sub>*.
 
-![FBG Spectra](./imgs/FBG_spectra.png)
+![FBG Spectra](imgs/FBG_spectra.png)
 
 The problem consists in finding the spectral shifts of each sensor even when there is overlapping of their spectra, given that there is sufficient difference between the spectral profiles either in I<sub>i</sub>, in Δλ<sub>Bi</sub>, or in both.
 
