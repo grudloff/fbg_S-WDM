@@ -92,4 +92,4 @@ Gabriel Rudloff Thesis,
 https://repositorio.usm.cl/entities/tesis/a6587a62-e87d-40e0-801f-247258d05813
 
 [3]
-Rudloff, Gabriel & Soto, Marcelo. (2024). Multi-Peak Wavelength Detection of Spectrally-Overlapped Fiber Bragg Grating Sensors Through a CNN-Based Autoencoder. IEEE Sensors Journal. PP. 1-1. 10.1109/JSEN.2024.3400819. 
+Rudloff, Gabriel & Soto, Marcelo. (2024). Multi-Peak Wavelength Detection of Spectrally-Overlapped Fiber Bragg Grating Sensors Through a CNN-Based Autoencoder. IEEE Sensors Journal. PP. 1-1. https://doi.org/10.1109/JSEN.2024.3400819. 
