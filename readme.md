@@ -54,7 +54,10 @@ model = alg.fit(X_train, y_train)
 ```python
 y_test_hat = alg.predict(X_test)
 ```
-## Repo Files
+
+A full example of the basic usage can be found in the notebook `example.ipynb`. The example includes the steps to install the package and has been tested on Google Colab.
+
+## Package Utility Files
 * simulation.py: Functions for data generation
 * variables.py: FBG array parameters for data generation and model construction
 * visualization.py: Functions for various visualization tasks
