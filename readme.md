@@ -16,13 +16,13 @@ Conventionally a WDM FBG network requires no overlap on the FBGs spectra for con
 The FBG spectral profile, can be reasonably approximated to a Gaussian shape. This approximation is depicted in the figure below, for the matching values of *I<sub>i</sub>*, *λ<sub>Bi</sub>* and *Δλ<sub>Bi</sub>*.
 
 <p align="center">
-  <img src="imgs/FBG_spectra.png" />
+  <img src="./imgs/FBG_spectra.png" />
 </p>
 
 The problem consists in finding the spectral shifts of each sensor even when there is overlapping of their spectra, given that there is sufficient difference between the spectral profiles either in I<sub>i</sub>, in Δλ<sub>Bi</sub>, or in both.
 
 <p align="center">
-  <img src="imgs/poster_sweep.png" />
+  <img src="./imgs/poster_sweep.png" />
 </p>
 
 # Methods
@@ -42,7 +42,7 @@ This optimization problem can be solved either through gradient descend or by fi
 The motivation behind this architecture is to ease the requirement for labeled data for training. The proposed model allows for training solely from the spectra without the need for spectral position information. This is achieved by minimizing the reconstruction error between observed and reconstructed spectra ($x$ and $\hat{x}$ in the figure below). The model incorporates a specially designed intermediate representation ($\tilde{y}$), particularly of dirac deltas that represent the sensor spectral position. This enhances the alignment of this intermediate representation and enables model convergence in the unsupervised scenario. This enables the model to be trained in an unsupervised manner using only spectral measurements, without requiring the FBG spectral positions.
 
 <p align="center">
-  <img src="imgs/AE.png" />
+  <img src="./imgs/AE.png" />
 </p>
 
 The proposed CNN-AE architecture employs a dilated convolutional neural network (CNN) without pooling layers, which ensures that the internal representations maintain the length of the input, making the latent variable translation-equivariant with respect to the input. The last layer of the encoder has one channel per FBG sensor, therefore making the latent variable an array of length N with Q channels (depth). The last activation function of the encoder is a softmax, which constraints that the latent variable is positive and with a per-channel normalized l1-norm. This helps in achieving the desired encoding while constricting the information flow. The decoder then utilizes a convolution layer to learn the individual spectral profiles and positions them with the Dirac deltas, yielding the separated spectra. These are then joined together through a topology dependant computation to yield the reconstruction.
