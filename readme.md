@@ -3,9 +3,14 @@
 
 A modulation in the refraction index of the core of an optical fiber generates a structure known as Fiber Bragg Grating (FBG), which behaves as a mirror for a narrow optical bandwidth. The reflection spectral profile depends on the index modulation profile. In consequence, if the modulation is modified by external factors, the reflection spectral profile is also affected. In particular, a change in the fiber temperature or axial strain induces a change in the length and refraction index of the FBG, which in turn translates into a lineal shift on the spectral profile's position. Leveraging this behavior, an FBG can be easily used as a sensor by measuring this spectral shift. In addition, an array of FBGs, inscribed in cascade along the optical fiber, can be used to construct a quasi-distributed sensor.
 
+<!---
 <p align="center">
   <img src="imgs/reflected.gif" />
 </p>
+-->
+
+[reflected](imgs/reflected.gif)
+[reflected](https://www.eonphotonics.com/Content/image/sayfalar/reflected.gif)
 
 The main multiplexing methods of such an array are *(i)* in wavelength, by positioning each FBG at a different spectral location to avoid spectral overlapping, and *(ii)* in time by positioning each FBG with sufficient distance to avoid temporal overlapping of the multiple interrogating pulse reflections. In wavelength domain there is a limitation in the number of FBGs that can be multiplexed given by the source bandwidth and the spectral width of each FBG. This limitation can be partially overcome by allowing spectral overlap and using more expensive signal processing schemes. This is known as Spectrally overlaped WDM (S-WDM).
 
